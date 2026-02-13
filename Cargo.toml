@@ -2,7 +2,7 @@
 name = "strimzi-backup-operator"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.75"
+rust-version = "1.88"
 license = "Apache-2.0"
 description = "Strimzi-native Kubernetes operator for Kafka backup and restore"
 repository = "https://github.com/osodevops/strimzi-backup-operator"
