@@ -38,29 +38,29 @@ The **Strimzi Backup Operator** solves these problems with a purpose-built Kuber
 The Strimzi Backup Operator creates Kubernetes Jobs (or CronJobs for scheduled backups) that run the `kafka-backup` CLI to perform backup and restore operations. This provides resource isolation, failure isolation, and pod-level customisation.
 
 ```
-┌──────────────────────────────────────────────────────┐
-│                  Kubernetes Cluster                   │
-│                                                      │
-│  ┌──────────────┐       ┌────────────────────────┐   │
-│  │   Strimzi     │       │  Strimzi Backup        │   │
-│  │   Cluster     │◄──────│  Operator              │   │
-│  │   Operator    │ reads │  (watches KafkaBackup   │   │
-│  │              │ Kafka  │   & KafkaRestore CRs)   │   │
-│  └──────┬───────┘  CRs  └──────────┬─────────────┘   │
-│         │                          │                  │
-│         ▼                          ▼ creates          │
-│  ┌──────────────┐       ┌────────────────────────┐   │
-│  │   Kafka CR    │       │  Backup/Restore Jobs   │   │
-│  │   + Brokers   │◄──────│  (kafka-backup CLI)    │   │
-│  │   + ZooKeeper │ reads │                        │   │
-│  └──────────────┘  data  └──────────┬─────────────┘   │
-│                                     │                  │
-│                                     ▼ writes/reads     │
-│                          ┌────────────────────────┐   │
-│                          │  Object Storage         │   │
-│                          │  (S3 / Azure / GCS)     │   │
-│                          └────────────────────────┘   │
-└──────────────────────────────────────────────────────┘
++------------------------------------------------------------+
+|                    Kubernetes Cluster                       |
+|                                                            |
+|  +------------------+         +------------------------+   |
+|  |  Strimzi         |         |  Strimzi Backup        |   |
+|  |  Cluster         | <------ |  Operator              |   |
+|  |  Operator        |  reads  |  (watches KafkaBackup  |   |
+|  |                  |  Kafka  |   & KafkaRestore CRs)  |   |
+|  +--------+---------+   CRs  +-----------+------------+   |
+|           |                               |                |
+|           v                               v creates        |
+|  +------------------+         +------------------------+   |
+|  |  Kafka CR        |         |  Backup/Restore Jobs   |   |
+|  |  + Brokers       | <------ |  (kafka-backup CLI)    |   |
+|  |  + ZooKeeper     |  reads  |                        |   |
+|  +------------------+  data   +-----------+------------+   |
+|                                           |                |
+|                                           v writes/reads   |
+|                               +------------------------+   |
+|                               |  Object Storage        |   |
+|                               |  (S3 / Azure / GCS)    |   |
+|                               +------------------------+   |
++------------------------------------------------------------+
 ```
 
 ## Quick Start
@@ -296,12 +296,13 @@ metrics:
 ## Disaster Recovery Workflow
 
 ```
-1. SCHEDULE          2. BACKUP             3. DISASTER           4. RESTORE
-   ┌─────────┐         ┌─────────┐          ┌─────────┐          ┌─────────┐
-   │ CronJob  │────────►│  Kafka   │─────────►│  Data   │          │  PITR   │
-   │ triggers │  reads  │  Backup  │  stores  │  Safe   │  apply   │ Restore │
-   │ backup   │  data   │  Job     │  to S3   │  in S3  │────────►│  Job    │
-   └─────────┘         └─────────┘          └─────────┘          └─────────┘
+1. SCHEDULE         2. BACKUP          3. DISASTER        4. RESTORE
+
++-----------+      +-----------+      +-----------+      +-----------+
+|  CronJob  |----->|   Kafka   |----->|   Data    |      |   PITR    |
+|  triggers |reads |   Backup  |stores|   Safe    |apply |  Restore  |
+|  backup   |data  |   Job     |to S3 |   in S3   |----->|   Job     |
++-----------+      +-----------+      +-----------+      +-----------+
 ```
 
 1. **Schedule** — The operator creates a CronJob based on your `KafkaBackup` schedule
