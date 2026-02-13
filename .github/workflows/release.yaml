@@ -212,7 +212,7 @@ jobs:
       - name: Trigger helm-charts repo workflow
         uses: peter-evans/repository-dispatch@v4
         with:
-          token: ${{ secrets.GIT_ORG_REPO_TAG }}
+          token: ${{ secrets.HELM_CHARTS_PAT }}
           repository: osodevops/helm-charts
           event-type: update-strimzi-backup-operator
           client-payload: '{"version": "${{ needs.validate.outputs.version }}"}'
