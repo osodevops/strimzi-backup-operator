@@ -36,6 +36,10 @@ spec:
         - name: operator
           image: {{ include "strimzi-backup-operator.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- with .Values.commandOverride }}
+          command:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
           ports:
             - name: metrics
               containerPort: 9090
@@ -63,6 +67,7 @@ spec:
             {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
+          {{- if not .Values.commandOverride }}
           livenessProbe:
             httpGet:
               path: /healthz
@@ -79,6 +84,7 @@ spec:
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
+          {{- end }}
           securityContext:
             {{- toYaml .Values.containerSecurityContext | nindent 12 }}
       terminationGracePeriodSeconds: 30

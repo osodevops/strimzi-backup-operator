@@ -1,0 +1,12 @@
+# Values override for chart-testing (ct install) in CI.
+# Uses a lightweight image since the real operator image may not
+# be published yet when chart PRs are tested.
+image:
+  repository: busybox
+  tag: latest
+  pullPolicy: IfNotPresent
+
+commandOverride:
+  - sh
+  - -c
+  - "echo 'chart-testing mode' && sleep 30"
