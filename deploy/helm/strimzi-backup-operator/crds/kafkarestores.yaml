@@ -211,11 +211,16 @@ spec:
                     properties:
                       env:
                         description: Additional environment variables (pass-through to k8s EnvVar)
-                        items: {}
+                        items:
+                          type: object
+                          x-kubernetes-preserve-unknown-fields: true
                         type: array
                       securityContext:
                         description: Container security context (pass-through to k8s SecurityContext)
-                        nullable: true
+                        type: object
+                        x-kubernetes-preserve-unknown-fields: true
+                    required:
+                    - securityContext
                     type: object
                   pod:
                     description: Pod-level overrides
@@ -223,10 +228,13 @@ spec:
                     properties:
                       affinity:
                         description: Pod affinity rules (pass-through to k8s Affinity)
-                        nullable: true
+                        type: object
+                        x-kubernetes-preserve-unknown-fields: true
                       imagePullSecrets:
                         description: Image pull secrets
-                        items: {}
+                        items:
+                          type: object
+                          x-kubernetes-preserve-unknown-fields: true
                         type: array
                       metadata:
                         description: Additional metadata for the pod
@@ -245,11 +253,17 @@ spec:
                         type: object
                       securityContext:
                         description: Pod security context (pass-through to k8s PodSecurityContext)
-                        nullable: true
+                        type: object
+                        x-kubernetes-preserve-unknown-fields: true
                       tolerations:
                         description: Pod tolerations (pass-through to k8s Tolerations)
-                        items: {}
+                        items:
+                          type: object
+                          x-kubernetes-preserve-unknown-fields: true
                         type: array
+                    required:
+                    - affinity
+                    - securityContext
                     type: object
                 type: object
               topicMapping:

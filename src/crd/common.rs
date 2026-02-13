@@ -241,15 +241,19 @@ pub struct PodOverrides {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata: Option<PodMetadata>,
     /// Pod affinity rules (pass-through to k8s Affinity)
+    #[schemars(schema_with = "free_form_object")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub affinity: Option<serde_json::Value>,
     /// Pod tolerations (pass-through to k8s Tolerations)
+    #[schemars(schema_with = "free_form_object_array")]
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub tolerations: Vec<serde_json::Value>,
     /// Pod security context (pass-through to k8s PodSecurityContext)
+    #[schemars(schema_with = "free_form_object")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub security_context: Option<serde_json::Value>,
     /// Image pull secrets
+    #[schemars(schema_with = "free_form_object_array")]
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub image_pull_secrets: Vec<serde_json::Value>,
 }
@@ -269,11 +273,54 @@ pub struct PodMetadata {
 #[serde(rename_all = "camelCase")]
 pub struct ContainerOverrides {
     /// Additional environment variables (pass-through to k8s EnvVar)
+    #[schemars(schema_with = "free_form_object_array")]
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub env: Vec<serde_json::Value>,
     /// Container security context (pass-through to k8s SecurityContext)
+    #[schemars(schema_with = "free_form_object")]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub security_context: Option<serde_json::Value>,
+}
+
+/// Schema helper: a nullable free-form object (type: object with no properties)
+fn free_form_object(_: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+    schemars::schema::Schema::Object(schemars::schema::SchemaObject {
+        instance_type: Some(schemars::schema::InstanceType::Object.into()),
+        extensions: {
+            let mut map = schemars::Map::new();
+            map.insert(
+                "x-kubernetes-preserve-unknown-fields".to_string(),
+                serde_json::Value::Bool(true),
+            );
+            map
+        },
+        ..Default::default()
+    })
+}
+
+/// Schema helper: an array of free-form objects
+fn free_form_object_array(_: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+    schemars::schema::Schema::Object(schemars::schema::SchemaObject {
+        instance_type: Some(schemars::schema::InstanceType::Array.into()),
+        array: Some(Box::new(schemars::schema::ArrayValidation {
+            items: Some(schemars::schema::SingleOrVec::Single(Box::new(
+                schemars::schema::Schema::Object(schemars::schema::SchemaObject {
+                    instance_type: Some(schemars::schema::InstanceType::Object.into()),
+                    extensions: {
+                        let mut map = schemars::Map::new();
+                        map.insert(
+                            "x-kubernetes-preserve-unknown-fields".to_string(),
+                            serde_json::Value::Bool(true),
+                        );
+                        map
+                    },
+                    ..Default::default()
+                }),
+            ))),
+            ..Default::default()
+        })),
+        ..Default::default()
+    })
 }
 
 // --- Status types (Strimzi convention) ---
