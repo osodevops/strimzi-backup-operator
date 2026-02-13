@@ -1,7 +1,7 @@
 # Strimzi Backup Operator
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
-[![Rust](https://img.shields.io/badge/rust-1.75%2B-orange.svg)](https://www.rust-lang.org)
+[![Rust](https://img.shields.io/badge/rust-1.88%2B-orange.svg)](https://www.rust-lang.org)
 [![Kubernetes](https://img.shields.io/badge/kubernetes-1.27%2B-326ce5.svg)](https://kubernetes.io)
 
 A Strimzi-native Kubernetes operator for **Strimzi backup** and disaster recovery of Apache Kafka clusters. Provides dedicated CRDs for automated Kafka backup scheduling, point-in-time recovery, and multi-cloud storage — fully integrated with the Strimzi ecosystem.
@@ -74,7 +74,12 @@ The Strimzi Backup Operator creates Kubernetes Jobs (or CronJobs for scheduled b
 ### Install with Helm
 
 ```bash
-helm install strimzi-backup-operator deploy/helm/strimzi-backup-operator \
+# Add the OSO DevOps Helm repository
+helm repo add oso-devops https://osodevops.github.io/helm-charts/
+helm repo update
+
+# Install the operator
+helm install strimzi-backup-operator oso-devops/strimzi-backup-operator \
   --namespace kafka \
   --create-namespace
 ```
@@ -314,7 +319,7 @@ metrics:
 
 ### Prerequisites
 
-- Rust 1.75+ (stable)
+- Rust 1.88+ (stable)
 - A Kubernetes cluster with Strimzi installed (for integration testing)
 
 ### Build from Source

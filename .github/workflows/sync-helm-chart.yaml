@@ -20,7 +20,7 @@ jobs:
 
     steps:
       - name: Checkout source repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           path: source-repo
 
@@ -33,7 +33,7 @@ jobs:
           echo "app_version=$APP_VERSION" >> $GITHUB_OUTPUT
 
       - name: Checkout target repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: ${{ env.TARGET_REPO }}
           token: ${{ secrets.HELM_CHARTS_PAT }}
@@ -47,7 +47,7 @@ jobs:
           cp -r source-repo/${{ env.SOURCE_CHART_PATH }}/* target-repo/${{ env.TARGET_CHART_PATH }}/
 
       - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v7
+        uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.HELM_CHARTS_PAT }}
           path: target-repo
