@@ -1,0 +1,57 @@
+[package]
+name = "strimzi-backup-operator"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+license = "Apache-2.0"
+description = "Strimzi-native Kubernetes operator for Kafka backup and restore"
+repository = "https://github.com/osodevops/strimzi-backup-operator"
+
+[[bin]]
+name = "strimzi-backup-operator"
+path = "src/main.rs"
+
+[[bin]]
+name = "crdgen"
+path = "src/bin/crdgen.rs"
+
+[dependencies]
+# Kubernetes
+kube = { version = "0.95", features = ["runtime", "derive", "client"] }
+kube-runtime = "0.95"
+k8s-openapi = { version = "0.23", features = ["v1_30"] }
+
+# Async runtime
+tokio = { version = "1", features = ["full", "signal"] }
+futures = "0.3"
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+schemars = { version = "0.8", features = ["chrono"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+
+# Metrics
+prometheus = "0.13"
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# Web server (health endpoints + metrics)
+axum = "0.8"
+
+# Regex for topic/group filtering
+regex = "1"
+
+[dev-dependencies]
+tokio-test = "0.4"
+assert-json-diff = "2"
+tempfile = "3"

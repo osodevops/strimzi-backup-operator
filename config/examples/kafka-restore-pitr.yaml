@@ -1,0 +1,47 @@
+apiVersion: backup.strimzi.io/v1alpha1
+kind: KafkaRestore
+metadata:
+  name: pitr-restore
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: dr-kafka-cluster
+spec:
+  strimziClusterRef:
+    name: dr-kafka-cluster
+
+  authentication:
+    type: tls
+    kafkaUserRef:
+      name: restore-service-account
+
+  backupRef:
+    name: daily-backup
+    backupId: "backup-20260213-020000"
+
+  pointInTime:
+    timestamp: "2026-02-13T01:30:00.000Z"
+
+  topicMapping:
+    - sourceTopic: "orders"
+      targetTopic: "orders-restored"
+    - sourceTopic: "payments"
+      targetTopic: "payments-restored"
+
+  consumerGroups:
+    restore: true
+    mapping:
+      - sourceGroup: "order-processor"
+        targetGroup: "order-processor"
+
+  restore:
+    topicCreation: auto
+    existingTopicPolicy: fail
+    parallelism: 4
+
+  resources:
+    requests:
+      cpu: "1"
+      memory: "2Gi"
+    limits:
+      cpu: "4"
+      memory: "8Gi"

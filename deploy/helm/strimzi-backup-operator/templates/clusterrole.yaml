@@ -1,0 +1,47 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "strimzi-backup-operator.fullname" . }}
+  labels:
+    {{- include "strimzi-backup-operator.labels" . | nindent 4 }}
+rules:
+  # Read Strimzi resources
+  - apiGroups: ["kafka.strimzi.io"]
+    resources: ["kafkas", "kafkatopics", "kafkausers"]
+    verbs: ["get", "list", "watch"]
+  # Manage backup CRDs
+  - apiGroups: ["backup.strimzi.io"]
+    resources: ["kafkabackups", "kafkarestores"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["backup.strimzi.io"]
+    resources: ["kafkabackups/status", "kafkarestores/status"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: ["backup.strimzi.io"]
+    resources: ["kafkabackups/finalizers", "kafkarestores/finalizers"]
+    verbs: ["update"]
+  # Create backup/restore jobs
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Read secrets for credentials
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch"]
+  # Manage configmaps for job configs
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Emit Kubernetes events
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  # Watch pods for job status
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  # Leader election
+  {{- if .Values.leaderElection.enabled }}
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  {{- end }}

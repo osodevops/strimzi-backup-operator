@@ -1,0 +1,370 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: kafkarestores.backup.strimzi.io
+spec:
+  group: backup.strimzi.io
+  names:
+    categories: []
+    kind: KafkaRestore
+    plural: kafkarestores
+    shortNames:
+    - kr
+    singular: kafkarestore
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.strimziClusterRef.name
+      name: Cluster
+      type: string
+    - jsonPath: .spec.backupRef.name
+      name: Backup
+      type: string
+    - jsonPath: .status.conditions[?(@.type=="Ready")].reason
+      name: Status
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Auto-generated derived type for KafkaRestoreSpec via `CustomResource`
+        properties:
+          spec:
+            description: KafkaRestore defines a restore operation from a KafkaBackup to a Strimzi-managed Kafka cluster. Supports point-in-time recovery, topic mapping, and consumer group offset restore.
+            properties:
+              authentication:
+                description: Authentication for the target cluster
+                nullable: true
+                properties:
+                  certificateAndKey:
+                    description: Manual TLS certificate secret reference
+                    nullable: true
+                    properties:
+                      certificate:
+                        description: Key for the certificate
+                        type: string
+                      key:
+                        description: Key for the private key
+                        type: string
+                      secretName:
+                        description: Secret name
+                        type: string
+                    required:
+                    - certificate
+                    - key
+                    - secretName
+                    type: object
+                  kafkaUserRef:
+                    description: Reference to a KafkaUser CR (operator resolves credentials automatically)
+                    nullable: true
+                    properties:
+                      name:
+                        description: Name of the KafkaUser CR
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  passwordSecret:
+                    description: Manual SCRAM password secret reference
+                    nullable: true
+                    properties:
+                      key:
+                        description: Key within the secret
+                        type: string
+                      name:
+                        description: Secret name
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  type:
+                    description: 'Authentication type: tls or scram-sha-512'
+                    enum:
+                    - tls
+                    - scram-sha-512
+                    type: string
+                  username:
+                    description: Username for SCRAM authentication
+                    nullable: true
+                    type: string
+                required:
+                - type
+                type: object
+              backupRef:
+                description: Reference to the source backup
+                properties:
+                  backupId:
+                    description: Specific backup ID to restore from (latest if omitted)
+                    nullable: true
+                    type: string
+                  name:
+                    description: Name of the KafkaBackup CR
+                    type: string
+                required:
+                - name
+                type: object
+              consumerGroups:
+                description: Consumer group restore configuration
+                nullable: true
+                properties:
+                  mapping:
+                    description: Consumer group mappings (source → target)
+                    items:
+                      description: Mapping for a consumer group during restore
+                      properties:
+                        sourceGroup:
+                          description: Source consumer group name
+                          type: string
+                        targetGroup:
+                          description: Target consumer group name
+                          type: string
+                      required:
+                      - sourceGroup
+                      - targetGroup
+                      type: object
+                    type: array
+                  restore:
+                    default: false
+                    description: Whether to restore consumer group offsets
+                    type: boolean
+                type: object
+              image:
+                description: 'Container image for the restore job (default: ghcr.io/osodevops/kafka-backup:latest)'
+                nullable: true
+                type: string
+              pointInTime:
+                description: Point-in-time recovery settings
+                nullable: true
+                properties:
+                  offsetFromEnd:
+                    description: Duration offset from backup end (e.g., "2h", "30m")
+                    nullable: true
+                    type: string
+                  timestamp:
+                    description: Exact timestamp to restore to (ISO 8601 with millisecond precision)
+                    nullable: true
+                    type: string
+                type: object
+              resources:
+                description: Resource requirements for restore pods
+                nullable: true
+                properties:
+                  limits:
+                    additionalProperties:
+                      type: string
+                    description: Resource limits
+                    type: object
+                  requests:
+                    additionalProperties:
+                      type: string
+                    description: Resource requests
+                    type: object
+                type: object
+              restore:
+                description: Restore behaviour options
+                nullable: true
+                properties:
+                  existingTopicPolicy:
+                    description: 'Policy for existing topics: fail, append, or overwrite'
+                    enum:
+                    - fail
+                    - append
+                    - overwrite
+                    nullable: true
+                    type: string
+                  parallelism:
+                    description: 'Number of concurrent restore threads (default: 4)'
+                    format: int32
+                    nullable: true
+                    type: integer
+                  topicCreation:
+                    description: 'Topic creation strategy: auto or manual'
+                    enum:
+                    - auto
+                    - manual
+                    nullable: true
+                    type: string
+                type: object
+              strimziClusterRef:
+                description: Reference to the target Strimzi Kafka cluster CR
+                properties:
+                  name:
+                    description: Name of the Kafka CR
+                    type: string
+                  namespace:
+                    description: Namespace of the Kafka CR (defaults to same namespace as this resource)
+                    nullable: true
+                    type: string
+                required:
+                - name
+                type: object
+              template:
+                description: Template for customizing restore pods
+                nullable: true
+                properties:
+                  container:
+                    description: Container-level overrides
+                    nullable: true
+                    properties:
+                      env:
+                        description: Additional environment variables (pass-through to k8s EnvVar)
+                        items: {}
+                        type: array
+                      securityContext:
+                        description: Container security context (pass-through to k8s SecurityContext)
+                        nullable: true
+                    type: object
+                  pod:
+                    description: Pod-level overrides
+                    nullable: true
+                    properties:
+                      affinity:
+                        description: Pod affinity rules (pass-through to k8s Affinity)
+                        nullable: true
+                      imagePullSecrets:
+                        description: Image pull secrets
+                        items: {}
+                        type: array
+                      metadata:
+                        description: Additional metadata for the pod
+                        nullable: true
+                        properties:
+                          annotations:
+                            additionalProperties:
+                              type: string
+                            description: Additional annotations
+                            type: object
+                          labels:
+                            additionalProperties:
+                              type: string
+                            description: Additional labels
+                            type: object
+                        type: object
+                      securityContext:
+                        description: Pod security context (pass-through to k8s PodSecurityContext)
+                        nullable: true
+                      tolerations:
+                        description: Pod tolerations (pass-through to k8s Tolerations)
+                        items: {}
+                        type: array
+                    type: object
+                type: object
+              topicMapping:
+                description: Topic mapping for renaming topics during restore
+                items:
+                  description: Mapping for renaming a topic during restore
+                  properties:
+                    sourceTopic:
+                      description: Source topic name in the backup
+                      type: string
+                    targetTopic:
+                      description: Target topic name in the destination cluster
+                      type: string
+                  required:
+                  - sourceTopic
+                  - targetTopic
+                  type: object
+                type: array
+            required:
+            - backupRef
+            - strimziClusterRef
+            type: object
+          status:
+            description: Status of a KafkaRestore resource (follows Strimzi conventions)
+            nullable: true
+            properties:
+              conditions:
+                description: Strimzi-convention status conditions
+                items:
+                  description: Strimzi-style status condition
+                  properties:
+                    lastTransitionTime:
+                      description: Time of last transition
+                      format: date-time
+                      nullable: true
+                      type: string
+                    message:
+                      description: Human-readable message
+                      nullable: true
+                      type: string
+                    reason:
+                      description: Machine-readable reason
+                      nullable: true
+                      type: string
+                    status:
+                      description: 'Status: "True", "False", or "Unknown"'
+                      type: string
+                    type:
+                      description: Condition type (e.g., Ready, BackupComplete, Error)
+                      type: string
+                  required:
+                  - status
+                  - type
+                  type: object
+                type: array
+              observedGeneration:
+                description: Generation observed by the operator
+                format: int64
+                nullable: true
+                type: integer
+              restore:
+                description: Details of the restore operation
+                nullable: true
+                properties:
+                  actualPointInTime:
+                    description: Actual PITR timestamp achieved
+                    format: date-time
+                    nullable: true
+                    type: string
+                  completionTime:
+                    description: Completion time
+                    format: date-time
+                    nullable: true
+                    type: string
+                  pointInTimeTarget:
+                    description: Requested PITR timestamp
+                    format: date-time
+                    nullable: true
+                    type: string
+                  restoredBytes:
+                    description: Total bytes restored
+                    format: int64
+                    nullable: true
+                    type: integer
+                  restoredPartitions:
+                    description: Number of partitions restored
+                    format: int32
+                    nullable: true
+                    type: integer
+                  restoredTopics:
+                    description: Number of topics restored
+                    format: int32
+                    nullable: true
+                    type: integer
+                  startTime:
+                    description: Start time
+                    format: date-time
+                    type: string
+                  status:
+                    description: Restore status
+                    enum:
+                    - Running
+                    - Completed
+                    - Failed
+                    type: string
+                required:
+                - startTime
+                - status
+                type: object
+            type: object
+        required:
+        - spec
+        title: KafkaRestore
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

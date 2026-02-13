@@ -1,0 +1,24 @@
+apiVersion: v2
+name: strimzi-backup-operator
+description: A Strimzi-native Kubernetes operator for Kafka backup and restore
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/osodevops/strimzi-backup-operator
+icon: https://strimzi.io/assets/images/strimzi_logo.png
+sources:
+  - https://github.com/osodevops/strimzi-backup-operator
+maintainers:
+  - name: sionsmith
+    email: dev@oso.sh
+    url: https://osodevops.io
+keywords:
+  - strimzi
+  - kafka
+  - backup
+  - restore
+  - kubernetes
+  - operator
+  - disaster-recovery
+annotations:
+  category: Infrastructure

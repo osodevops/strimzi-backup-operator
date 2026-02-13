@@ -1,0 +1,50 @@
+Thank you for installing {{ .Chart.Name }}!
+
+Your release is named: {{ .Release.Name }}
+
+To verify the installation, run:
+
+  kubectl get pods -l "app.kubernetes.io/name={{ include "strimzi-backup-operator.name" . }},app.kubernetes.io/instance={{ .Release.Name }}"
+
+The operator is now watching for the following custom resources:
+  - KafkaBackup  (backup.strimzi.io/v1alpha1)
+  - KafkaRestore (backup.strimzi.io/v1alpha1)
+
+To create a backup, apply a KafkaBackup resource:
+
+  apiVersion: backup.strimzi.io/v1alpha1
+  kind: KafkaBackup
+  metadata:
+    name: my-cluster-backup
+  spec:
+    strimziClusterRef:
+      name: my-cluster
+    storage:
+      type: s3
+      s3:
+        bucket: my-kafka-backups
+        region: us-east-1
+    schedule:
+      cron: "0 2 * * *"  # Daily at 2 AM
+
+To restore from a backup:
+
+  apiVersion: backup.strimzi.io/v1alpha1
+  kind: KafkaRestore
+  metadata:
+    name: my-cluster-restore
+  spec:
+    strimziClusterRef:
+      name: my-cluster
+    backupRef:
+      name: my-cluster-backup
+
+For more information, visit:
+  https://github.com/osodevops/strimzi-backup-operator
+
+{{- if .Values.metrics.enabled }}
+
+Metrics are available at:
+  kubectl port-forward svc/{{ include "strimzi-backup-operator.fullname" . }}-metrics {{ .Values.service.port }}:{{ .Values.service.port }}
+  curl http://localhost:{{ .Values.service.port }}/metrics
+{{- end }}

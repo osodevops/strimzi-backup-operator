@@ -1,0 +1,108 @@
+# Default values for strimzi-backup-operator
+
+# Number of replicas
+replicaCount: 1
+
+image:
+  repository: ghcr.io/osodevops/strimzi-backup-operator
+  pullPolicy: Always
+  # Overrides the image tag whose default is the chart appVersion
+  tag: ""
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Annotations to add to the service account
+  # For Azure Workload Identity, add:
+  #   azure.workload.identity/client-id: "<managed-identity-client-id>"
+  annotations: {}
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
+  name: ""
+
+# Azure Workload Identity configuration
+# When enabled, the operator can authenticate to Azure services using federated identity tokens
+# instead of storing credentials in Kubernetes secrets
+azureWorkloadIdentity:
+  # Enable Azure Workload Identity support
+  enabled: false
+  # The client ID of the Azure Managed Identity
+  # This should match the identity federated with this service account
+  clientId: ""
+
+# Namespaces to watch (empty = all namespaces)
+watchNamespaces: []
+
+# Logging configuration
+logging:
+  level: "info,strimzi_backup_operator=debug"
+  format: json
+
+# Pod annotations
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "9090"
+  prometheus.io/path: "/metrics"
+
+podLabels: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  fsGroup: 1000
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop:
+      - ALL
+
+# Metrics service configuration
+service:
+  type: ClusterIP
+  port: 9090
+  annotations: {}
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+nodeSelector:
+  kubernetes.io/os: linux
+
+tolerations: []
+
+affinity: {}
+
+# Metrics configuration
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: false
+    namespace: ""
+    interval: 30s
+    scrapeTimeout: 10s
+    labels: {}
+
+# CRD installation
+crds:
+  # Install CRDs with the chart
+  install: true
+  # Keep CRDs on chart uninstall
+  keep: true
+
+# Leader election configuration (for HA deployments)
+leaderElection:
+  enabled: false
+  leaseDuration: 15s
+  renewDeadline: 10s
+  retryPeriod: 2s

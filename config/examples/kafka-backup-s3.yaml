@@ -1,0 +1,55 @@
+apiVersion: backup.strimzi.io/v1alpha1
+kind: KafkaBackup
+metadata:
+  name: daily-backup
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: my-kafka-cluster
+spec:
+  strimziClusterRef:
+    name: my-kafka-cluster
+
+  authentication:
+    type: tls
+    kafkaUserRef:
+      name: backup-service-account
+
+  topics:
+    include:
+      - "orders.*"
+      - "payments.*"
+    exclude:
+      - ".*\\.internal"
+      - "__.*"
+
+  storage:
+    type: s3
+    s3:
+      bucket: my-kafka-backups
+      region: eu-west-1
+      prefix: "strimzi/my-kafka-cluster/"
+      credentialsSecret:
+        name: backup-s3-credentials
+        key: aws-credentials
+
+  backup:
+    compression: zstd
+    segmentSize: 268435456
+    parallelism: 4
+
+  schedule:
+    cron: "0 2 * * *"
+    timezone: "UTC"
+
+  retention:
+    maxBackups: 30
+    maxAge: "30d"
+    pruneOnSchedule: true
+
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "1Gi"
+    limits:
+      cpu: "2"
+      memory: "4Gi"

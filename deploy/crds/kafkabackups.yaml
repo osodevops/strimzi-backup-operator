@@ -1,0 +1,555 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: kafkabackups.backup.strimzi.io
+spec:
+  group: backup.strimzi.io
+  names:
+    categories: []
+    kind: KafkaBackup
+    plural: kafkabackups
+    shortNames:
+    - kb
+    singular: kafkabackup
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.strimziClusterRef.name
+      name: Cluster
+      type: string
+    - jsonPath: .spec.schedule.cron
+      name: Schedule
+      type: string
+    - jsonPath: .status.lastBackup.completionTime
+      name: Last Backup
+      type: date
+    - jsonPath: .status.conditions[?(@.type=="Ready")].status
+      name: Ready
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Auto-generated derived type for KafkaBackupSpec via `CustomResource`
+        properties:
+          spec:
+            description: KafkaBackup defines a backup configuration for a Strimzi-managed Kafka cluster. The operator creates Kubernetes Jobs that run the kafka-backup CLI to perform backups.
+            properties:
+              authentication:
+                description: Authentication configuration for connecting to the Kafka cluster
+                nullable: true
+                properties:
+                  certificateAndKey:
+                    description: Manual TLS certificate secret reference
+                    nullable: true
+                    properties:
+                      certificate:
+                        description: Key for the certificate
+                        type: string
+                      key:
+                        description: Key for the private key
+                        type: string
+                      secretName:
+                        description: Secret name
+                        type: string
+                    required:
+                    - certificate
+                    - key
+                    - secretName
+                    type: object
+                  kafkaUserRef:
+                    description: Reference to a KafkaUser CR (operator resolves credentials automatically)
+                    nullable: true
+                    properties:
+                      name:
+                        description: Name of the KafkaUser CR
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  passwordSecret:
+                    description: Manual SCRAM password secret reference
+                    nullable: true
+                    properties:
+                      key:
+                        description: Key within the secret
+                        type: string
+                      name:
+                        description: Secret name
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
+                  type:
+                    description: 'Authentication type: tls or scram-sha-512'
+                    enum:
+                    - tls
+                    - scram-sha-512
+                    type: string
+                  username:
+                    description: Username for SCRAM authentication
+                    nullable: true
+                    type: string
+                required:
+                - type
+                type: object
+              backup:
+                description: Backup options (compression, encryption, parallelism)
+                nullable: true
+                properties:
+                  compression:
+                    description: 'Compression algorithm: none, gzip, snappy, lz4, zstd'
+                    nullable: true
+                    type: string
+                  encryption:
+                    description: Encryption configuration
+                    nullable: true
+                    properties:
+                      enabled:
+                        default: false
+                        description: Enable encryption
+                        type: boolean
+                      keySecret:
+                        description: Secret containing the encryption key
+                        nullable: true
+                        properties:
+                          key:
+                            description: Key within the secret
+                            type: string
+                          name:
+                            description: Secret name
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
+                    type: object
+                  parallelism:
+                    description: 'Number of concurrent partition backup threads (default: 4)'
+                    format: int32
+                    nullable: true
+                    type: integer
+                  segmentSize:
+                    description: 'Maximum segment file size in bytes before rotation (default: 256MB)'
+                    format: int64
+                    nullable: true
+                    type: integer
+                type: object
+              consumerGroups:
+                description: Consumer group selection
+                nullable: true
+                properties:
+                  exclude:
+                    description: Regex patterns for consumer groups to exclude
+                    items:
+                      type: string
+                    type: array
+                  include:
+                    description: Regex patterns for consumer groups to include
+                    items:
+                      type: string
+                    type: array
+                type: object
+              image:
+                description: 'Container image for the backup job (default: ghcr.io/osodevops/kafka-backup:latest)'
+                nullable: true
+                type: string
+              resources:
+                description: Resource requirements for backup pods
+                nullable: true
+                properties:
+                  limits:
+                    additionalProperties:
+                      type: string
+                    description: Resource limits
+                    type: object
+                  requests:
+                    additionalProperties:
+                      type: string
+                    description: Resource requests
+                    type: object
+                type: object
+              retention:
+                description: Retention policy for managing old backups
+                nullable: true
+                properties:
+                  maxAge:
+                    description: Maximum age of backups (e.g., "30d", "720h")
+                    nullable: true
+                    type: string
+                  maxBackups:
+                    description: Maximum number of backups to retain
+                    format: int32
+                    nullable: true
+                    type: integer
+                  pruneOnSchedule:
+                    default: false
+                    description: Automatically prune expired backups after each scheduled run
+                    type: boolean
+                type: object
+              schedule:
+                description: Cron schedule configuration
+                nullable: true
+                properties:
+                  cron:
+                    description: Cron expression (e.g., "0 2 * * *" for daily at 2 AM)
+                    type: string
+                  suspend:
+                    default: false
+                    description: Suspend scheduling
+                    type: boolean
+                  timezone:
+                    description: 'Timezone (default: UTC)'
+                    nullable: true
+                    type: string
+                required:
+                - cron
+                type: object
+              storage:
+                description: Storage destination configuration
+                properties:
+                  azure:
+                    description: Azure Blob Storage configuration
+                    nullable: true
+                    properties:
+                      container:
+                        description: Azure blob container name
+                        type: string
+                      credentialsSecret:
+                        description: Secret containing Azure credentials
+                        nullable: true
+                        properties:
+                          key:
+                            description: Key within the secret
+                            type: string
+                          name:
+                            description: Secret name
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
+                      prefix:
+                        description: Key prefix within the container
+                        nullable: true
+                        type: string
+                      storageAccount:
+                        description: Azure storage account name
+                        type: string
+                    required:
+                    - container
+                    - storageAccount
+                    type: object
+                  gcs:
+                    description: Google Cloud Storage configuration
+                    nullable: true
+                    properties:
+                      bucket:
+                        description: GCS bucket name
+                        type: string
+                      credentialsSecret:
+                        description: Secret containing GCS service account JSON
+                        nullable: true
+                        properties:
+                          key:
+                            description: Key within the secret
+                            type: string
+                          name:
+                            description: Secret name
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
+                      prefix:
+                        description: Key prefix within the bucket
+                        nullable: true
+                        type: string
+                    required:
+                    - bucket
+                    type: object
+                  s3:
+                    description: S3-compatible storage configuration
+                    nullable: true
+                    properties:
+                      bucket:
+                        description: S3 bucket name
+                        type: string
+                      credentialsSecret:
+                        description: Secret containing AWS credentials
+                        nullable: true
+                        properties:
+                          key:
+                            description: Key within the secret
+                            type: string
+                          name:
+                            description: Secret name
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
+                      endpoint:
+                        description: S3-compatible endpoint URL (for MinIO, Ceph RGW, etc.)
+                        nullable: true
+                        type: string
+                      forcePathStyle:
+                        description: Force path-style access (required for MinIO)
+                        nullable: true
+                        type: boolean
+                      prefix:
+                        description: Key prefix within the bucket
+                        nullable: true
+                        type: string
+                      region:
+                        description: AWS region
+                        nullable: true
+                        type: string
+                    required:
+                    - bucket
+                    type: object
+                  type:
+                    description: Storage backend type
+                    enum:
+                    - s3
+                    - azure
+                    - gcs
+                    type: string
+                required:
+                - type
+                type: object
+              strimziClusterRef:
+                description: Reference to the Strimzi Kafka cluster CR
+                properties:
+                  name:
+                    description: Name of the Kafka CR
+                    type: string
+                  namespace:
+                    description: Namespace of the Kafka CR (defaults to same namespace as this resource)
+                    nullable: true
+                    type: string
+                required:
+                - name
+                type: object
+              template:
+                description: Template for customizing backup pods
+                nullable: true
+                properties:
+                  container:
+                    description: Container-level overrides
+                    nullable: true
+                    properties:
+                      env:
+                        description: Additional environment variables (pass-through to k8s EnvVar)
+                        items: {}
+                        type: array
+                      securityContext:
+                        description: Container security context (pass-through to k8s SecurityContext)
+                        nullable: true
+                    type: object
+                  pod:
+                    description: Pod-level overrides
+                    nullable: true
+                    properties:
+                      affinity:
+                        description: Pod affinity rules (pass-through to k8s Affinity)
+                        nullable: true
+                      imagePullSecrets:
+                        description: Image pull secrets
+                        items: {}
+                        type: array
+                      metadata:
+                        description: Additional metadata for the pod
+                        nullable: true
+                        properties:
+                          annotations:
+                            additionalProperties:
+                              type: string
+                            description: Additional annotations
+                            type: object
+                          labels:
+                            additionalProperties:
+                              type: string
+                            description: Additional labels
+                            type: object
+                        type: object
+                      securityContext:
+                        description: Pod security context (pass-through to k8s PodSecurityContext)
+                        nullable: true
+                      tolerations:
+                        description: Pod tolerations (pass-through to k8s Tolerations)
+                        items: {}
+                        type: array
+                    type: object
+                type: object
+              topics:
+                description: Topic selection with include/exclude regex patterns
+                nullable: true
+                properties:
+                  exclude:
+                    description: Regex patterns for topics to exclude
+                    items:
+                      type: string
+                    type: array
+                  include:
+                    description: Regex patterns for topics to include
+                    items:
+                      type: string
+                    type: array
+                type: object
+            required:
+            - storage
+            - strimziClusterRef
+            type: object
+          status:
+            description: Status of a KafkaBackup resource (follows Strimzi conventions)
+            nullable: true
+            properties:
+              backupHistory:
+                description: History of recent backups
+                items:
+                  description: Backup history entry
+                  properties:
+                    completionTime:
+                      description: Completion time
+                      format: date-time
+                      nullable: true
+                      type: string
+                    id:
+                      description: Unique backup ID
+                      type: string
+                    partitionsBackedUp:
+                      description: Number of partitions backed up
+                      format: int32
+                      nullable: true
+                      type: integer
+                    sizeBytes:
+                      description: Total size in bytes
+                      format: int64
+                      nullable: true
+                      type: integer
+                    startTime:
+                      description: Start time
+                      format: date-time
+                      type: string
+                    status:
+                      description: Backup status
+                      enum:
+                      - Running
+                      - Completed
+                      - Failed
+                      type: string
+                    topicsBackedUp:
+                      description: Number of topics backed up
+                      format: int32
+                      nullable: true
+                      type: integer
+                  required:
+                  - id
+                  - startTime
+                  - status
+                  type: object
+                type: array
+              conditions:
+                description: Strimzi-convention status conditions
+                items:
+                  description: Strimzi-style status condition
+                  properties:
+                    lastTransitionTime:
+                      description: Time of last transition
+                      format: date-time
+                      nullable: true
+                      type: string
+                    message:
+                      description: Human-readable message
+                      nullable: true
+                      type: string
+                    reason:
+                      description: Machine-readable reason
+                      nullable: true
+                      type: string
+                    status:
+                      description: 'Status: "True", "False", or "Unknown"'
+                      type: string
+                    type:
+                      description: Condition type (e.g., Ready, BackupComplete, Error)
+                      type: string
+                  required:
+                  - status
+                  - type
+                  type: object
+                type: array
+              lastBackup:
+                description: Details of the last backup
+                nullable: true
+                properties:
+                  completionTime:
+                    description: Completion time
+                    format: date-time
+                    nullable: true
+                    type: string
+                  id:
+                    description: Unique backup ID
+                    type: string
+                  newestTimestamp:
+                    description: Newest record timestamp
+                    format: date-time
+                    nullable: true
+                    type: string
+                  oldestTimestamp:
+                    description: Oldest record timestamp
+                    format: date-time
+                    nullable: true
+                    type: string
+                  partitionsBackedUp:
+                    description: Number of partitions backed up
+                    format: int32
+                    nullable: true
+                    type: integer
+                  sizeBytes:
+                    description: Total size in bytes
+                    format: int64
+                    nullable: true
+                    type: integer
+                  startTime:
+                    description: Start time
+                    format: date-time
+                    type: string
+                  status:
+                    description: Backup status
+                    enum:
+                    - Running
+                    - Completed
+                    - Failed
+                    type: string
+                  topicsBackedUp:
+                    description: Number of topics backed up
+                    format: int32
+                    nullable: true
+                    type: integer
+                required:
+                - id
+                - startTime
+                - status
+                type: object
+              nextScheduledBackup:
+                description: Next scheduled backup time
+                nullable: true
+                type: string
+              observedGeneration:
+                description: Generation observed by the operator
+                format: int64
+                nullable: true
+                type: integer
+            type: object
+        required:
+        - spec
+        title: KafkaBackup
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
