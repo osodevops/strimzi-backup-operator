@@ -1,10 +1,10 @@
-# Default values for strimzi-backup-operator
+# Default values for kafka-backup-operator
 
 # Number of replicas
 replicaCount: 1
 
 image:
-  repository: ghcr.io/osodevops/strimzi-backup-operator
+  repository: ghcr.io/osodevops/kafka-backup-operator
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion
   tag: ""
@@ -39,7 +39,7 @@ watchNamespaces: []
 
 # Logging configuration
 logging:
-  level: "info,strimzi_backup_operator=debug"
+  level: "info,kafka_backup_operator=debug"
   format: json
 
 # Pod annotations

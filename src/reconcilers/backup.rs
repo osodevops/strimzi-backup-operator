@@ -154,7 +154,7 @@ async fn handle_cleanup(backup: &KafkaBackup, client: &Client, namespace: &str) 
     // Delete associated jobs
     let jobs_api: Api<Job> = Api::namespaced(client.clone(), namespace);
     let lp = kube::api::ListParams::default().labels(&format!(
-        "app.kubernetes.io/managed-by=strimzi-backup-operator,backup.strimzi.io/backup={name}"
+        "app.kubernetes.io/managed-by=kafka-backup-operator,kafkabackup.com/backup={name}"
     ));
     if let Ok(job_list) = jobs_api.list(&lp).await {
         for job in job_list {
@@ -196,7 +196,7 @@ async fn add_finalizer(api: &Api<KafkaBackup>, name: &str) -> Result<()> {
     });
     api.patch(
         name,
-        &PatchParams::apply("strimzi-backup-operator"),
+        &PatchParams::apply("kafka-backup-operator"),
         &Patch::Merge(&patch),
     )
     .await?;
@@ -211,7 +211,7 @@ async fn remove_finalizer(api: &Api<KafkaBackup>, name: &str) -> Result<()> {
     });
     api.patch(
         name,
-        &PatchParams::apply("strimzi-backup-operator"),
+        &PatchParams::apply("kafka-backup-operator"),
         &Patch::Merge(&patch),
     )
     .await?;
@@ -228,7 +228,7 @@ async fn remove_trigger_annotation(api: &Api<KafkaBackup>, name: &str) -> Result
     });
     api.patch(
         name,
-        &PatchParams::apply("strimzi-backup-operator"),
+        &PatchParams::apply("kafka-backup-operator"),
         &Patch::Merge(&patch),
     )
     .await?;
@@ -251,12 +251,12 @@ async fn create_or_update_config_map(
             "name": name,
             "namespace": namespace,
             "labels": {
-                "app.kubernetes.io/managed-by": "strimzi-backup-operator",
-                "app.kubernetes.io/part-of": "strimzi-backup",
-                "backup.strimzi.io/backup": owner.name_any()
+                "app.kubernetes.io/managed-by": "kafka-backup-operator",
+                "app.kubernetes.io/part-of": "kafka-backup",
+                "kafkabackup.com/backup": owner.name_any()
             },
             "ownerReferences": [{
-                "apiVersion": "backup.strimzi.io/v1alpha1",
+                "apiVersion": "kafkabackup.com/v1alpha1",
                 "kind": "KafkaBackup",
                 "name": owner.name_any(),
                 "uid": owner.metadata.uid.as_deref().unwrap_or(""),
@@ -272,7 +272,7 @@ async fn create_or_update_config_map(
     cm_api
         .patch(
             name,
-            &PatchParams::apply("strimzi-backup-operator"),
+            &PatchParams::apply("kafka-backup-operator"),
             &Patch::Apply(cm),
         )
         .await?;
@@ -281,7 +281,7 @@ async fn create_or_update_config_map(
 
 async fn is_job_running(jobs_api: &Api<Job>, backup_name: &str) -> Result<bool> {
     let lp = kube::api::ListParams::default().labels(&format!(
-        "backup.strimzi.io/backup={backup_name},backup.strimzi.io/type=backup"
+        "kafkabackup.com/backup={backup_name},kafkabackup.com/type=backup"
     ));
     let jobs = jobs_api.list(&lp).await?;
     let running = jobs
@@ -301,7 +301,7 @@ async fn check_job_completion(
     let jobs_api: Api<Job> = Api::namespaced(client.clone(), &namespace);
 
     let lp = kube::api::ListParams::default().labels(&format!(
-        "backup.strimzi.io/backup={name},backup.strimzi.io/type=backup"
+        "kafkabackup.com/backup={name},kafkabackup.com/type=backup"
     ));
     let jobs = jobs_api.list(&lp).await?;
 
@@ -424,7 +424,7 @@ async fn patch_status(
     let patch = serde_json::json!({ "status": status });
     api.patch_status(
         name,
-        &PatchParams::apply("strimzi-backup-operator"),
+        &PatchParams::apply("kafka-backup-operator"),
         &Patch::Merge(&patch),
     )
     .await?;
@@ -441,7 +441,7 @@ async fn apply_resource<
     let patch = serde_json::to_value(resource).map_err(Error::Serialization)?;
     api.patch(
         name,
-        &PatchParams::apply("strimzi-backup-operator"),
+        &PatchParams::apply("kafka-backup-operator"),
         &Patch::Apply(patch),
     )
     .await?;

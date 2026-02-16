@@ -2,9 +2,9 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "strimzi-backup-operator.fullname" . }}-metrics
+  name: {{ include "kafka-backup-operator.fullname" . }}-metrics
   labels:
-    {{- include "strimzi-backup-operator.labels" . | nindent 4 }}
+    {{- include "kafka-backup-operator.labels" . | nindent 4 }}
   {{- with .Values.service.annotations }}
   annotations:
     {{- toYaml . | nindent 4 }}
@@ -17,5 +17,5 @@ spec:
       protocol: TCP
       name: metrics
   selector:
-    {{- include "strimzi-backup-operator.selectorLabels" . | nindent 4 }}
+    {{- include "kafka-backup-operator.selectorLabels" . | nindent 4 }}
 {{- end }}

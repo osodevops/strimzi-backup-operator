@@ -1,14 +1,14 @@
 [package]
-name = "strimzi-backup-operator"
+name = "kafka-backup-operator"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.88"
 license = "Apache-2.0"
-description = "Strimzi-native Kubernetes operator for Kafka backup and restore"
+description = "Kubernetes operator for Kafka backup and restore, integrated with Strimzi"
 repository = "https://github.com/osodevops/strimzi-backup-operator"
 
 [[bin]]
-name = "strimzi-backup-operator"
+name = "kafka-backup-operator"
 path = "src/main.rs"
 
 [[bin]]

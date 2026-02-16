@@ -53,11 +53,11 @@ The operator MUST follow established Strimzi patterns:
 
 | Convention | Implementation |
 |---|---|
-| **API Group** | `backup.strimzi.io/v1alpha1` (sub-group of strimzi.io domain) |
-| **CRD Naming** | `kafkabackups.backup.strimzi.io`, `kafkarestores.backup.strimzi.io` |
+| **API Group** | `kafkabackup.com/v1alpha1` (sub-group of strimzi.io domain) |
+| **CRD Naming** | `kafkabackups.kafkabackup.com`, `kafkarestores.kafkabackup.com` |
 | **Metadata Labels** | `app.kubernetes.io/name`, `app.kubernetes.io/instance`, `app.kubernetes.io/part-of: strimzi-backup`, `strimzi.io/cluster` |
 | **Status Conditions** | Follow Strimzi `status.conditions[]` pattern with `type`, `status`, `reason`, `message`, `lastTransitionTime` |
-| **Finalizers** | `backup.strimzi.io/cleanup` for safe resource deletion |
+| **Finalizers** | `kafkabackup.com/cleanup` for safe resource deletion |
 | **Watched Namespaces** | Configurable via `STRIMZI_BACKUP_NAMESPACE` environment variable, supporting single, multi, and all-namespace modes |
 | **OpenAPI v3 Schema** | Full validation on all CRD fields, following Strimzi's schema-first approach |
 
@@ -104,7 +104,7 @@ The operator reads credentials from the secret created by the Strimzi User Opera
 The primary CRD for defining backup configurations and schedules.
 
 ```yaml
-apiVersion: backup.strimzi.io/v1alpha1
+apiVersion: kafkabackup.com/v1alpha1
 kind: KafkaBackup
 metadata:
   name: daily-backup
@@ -247,7 +247,7 @@ status:
 The CRD for restoring data from a backup, including point-in-time recovery.
 
 ```yaml
-apiVersion: backup.strimzi.io/v1alpha1
+apiVersion: kafkabackup.com/v1alpha1
 kind: KafkaRestore
 metadata:
   name: restore-to-dr
@@ -337,7 +337,7 @@ status:
 A higher-level CRD for managing complex backup policies across multiple clusters.
 
 ```yaml
-apiVersion: backup.strimzi.io/v1alpha1
+apiVersion: kafkabackup.com/v1alpha1
 kind: KafkaBackupSchedule
 metadata:
   name: enterprise-backup-policy
@@ -469,7 +469,7 @@ rules:
     resources: ["kafkas", "kafkatopics", "kafkausers"]
     verbs: ["get", "list", "watch"]
   # Manage backup CRDs
-  - apiGroups: ["backup.strimzi.io"]
+  - apiGroups: ["kafkabackup.com"]
     resources: ["kafkabackups", "kafkarestores", "kafkabackups/status", "kafkarestores/status"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
   # Create backup/restore jobs
@@ -660,7 +660,7 @@ kubectl apply -f https://operatorhub.io/install/strimzi-backup-operator.yaml
 
 ## 12. Open Questions
 
-1. **API Group**: Should we use `backup.strimzi.io` (sub-domain of strimzi.io) or `kafkabackup.io` (independent)? Using the strimzi.io domain requires community approval or clear branding distinction.
+1. **API Group**: Should we use `kafkabackup.com` (sub-domain of strimzi.io) or `kafkabackup.io` (independent)? Using the strimzi.io domain requires community approval or clear branding distinction.
 2. **Strimzi contribution path**: Should this be proposed as a Strimzi sub-project, or remain an independent OSO project that integrates with Strimzi?
 3. **KRaft-only support**: Should v0.1.0 support both ZooKeeper and KRaft mode Strimzi clusters, or target KRaft-only given ZooKeeper deprecation?
 4. **Incremental backups**: Should v0.1.0 support incremental backups (only new offsets since last backup), or full-snapshot only?
@@ -714,7 +714,7 @@ helm install strimzi-backup-operator strimzi-backup/strimzi-backup-operator -n k
 
 # 4. Create a backup configuration
 kubectl apply -f - <<EOF
-apiVersion: backup.strimzi.io/v1alpha1
+apiVersion: kafkabackup.com/v1alpha1
 kind: KafkaBackup
 metadata:
   name: daily-backup
@@ -739,11 +739,11 @@ spec:
 EOF
 
 # 5. Trigger a manual backup
-kubectl annotate kafkabackup daily-backup backup.strimzi.io/trigger=now -n kafka
+kubectl annotate kafkabackup daily-backup kafkabackup.com/trigger=now -n kafka
 
 # 6. Restore to a point in time
 kubectl apply -f - <<EOF
-apiVersion: backup.strimzi.io/v1alpha1
+apiVersion: kafkabackup.com/v1alpha1
 kind: KafkaRestore
 metadata:
   name: pitr-restore

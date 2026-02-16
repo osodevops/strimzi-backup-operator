@@ -1,11 +1,11 @@
-use strimzi_backup_operator::adapters::restore_config::build_restore_config_yaml;
-use strimzi_backup_operator::crd::common::*;
-use strimzi_backup_operator::crd::kafka_backup::*;
-use strimzi_backup_operator::crd::kafka_restore::*;
-use strimzi_backup_operator::crd::{KafkaBackup, KafkaRestore};
-use strimzi_backup_operator::jobs::restore_job::build_restore_job;
-use strimzi_backup_operator::strimzi::kafka_cr::ResolvedKafkaCluster;
-use strimzi_backup_operator::strimzi::kafka_user::ResolvedAuth;
+use kafka_backup_operator::adapters::restore_config::build_restore_config_yaml;
+use kafka_backup_operator::crd::common::*;
+use kafka_backup_operator::crd::kafka_backup::*;
+use kafka_backup_operator::crd::kafka_restore::*;
+use kafka_backup_operator::crd::{KafkaBackup, KafkaRestore};
+use kafka_backup_operator::jobs::restore_job::build_restore_job;
+use kafka_backup_operator::strimzi::kafka_cr::ResolvedKafkaCluster;
+use kafka_backup_operator::strimzi::kafka_user::ResolvedAuth;
 
 fn sample_backup() -> KafkaBackup {
     let spec = KafkaBackupSpec {
@@ -149,7 +149,7 @@ fn test_restore_job_creation() {
         Some(&"dr-cluster".to_string())
     );
     assert_eq!(
-        labels.get("backup.strimzi.io/type"),
+        labels.get("kafkabackup.com/type"),
         Some(&"restore".to_string())
     );
 

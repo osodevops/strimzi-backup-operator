@@ -67,7 +67,7 @@ pub fn build_restore_job(
         containers: vec![container],
         volumes: Some(volumes),
         restart_policy: Some("Never".to_string()),
-        service_account_name: Some("strimzi-backup-operator".to_string()),
+        service_account_name: Some("kafka-backup-operator".to_string()),
         ..Default::default()
     };
 
@@ -76,7 +76,7 @@ pub fn build_restore_job(
 
     // Owner reference for garbage collection
     let owner_ref = OwnerReference {
-        api_version: "backup.strimzi.io/v1alpha1".to_string(),
+        api_version: "kafkabackup.com/v1alpha1".to_string(),
         kind: "KafkaRestore".to_string(),
         name: cr_name.clone(),
         uid: restore.metadata.uid.clone().unwrap_or_default(),

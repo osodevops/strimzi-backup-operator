@@ -12,7 +12,7 @@ use super::common::{
 /// The operator creates Kubernetes Jobs that run the kafka-backup CLI to perform backups.
 #[derive(CustomResource, Clone, Debug, Deserialize, Serialize, JsonSchema)]
 #[kube(
-    group = "backup.strimzi.io",
+    group = "kafkabackup.com",
     version = "v1alpha1",
     kind = "KafkaBackup",
     plural = "kafkabackups",

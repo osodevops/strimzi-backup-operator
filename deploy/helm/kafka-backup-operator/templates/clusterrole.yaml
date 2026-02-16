@@ -1,22 +1,22 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ include "strimzi-backup-operator.fullname" . }}
+  name: {{ include "kafka-backup-operator.fullname" . }}
   labels:
-    {{- include "strimzi-backup-operator.labels" . | nindent 4 }}
+    {{- include "kafka-backup-operator.labels" . | nindent 4 }}
 rules:
   # Read Strimzi resources
   - apiGroups: ["kafka.strimzi.io"]
     resources: ["kafkas", "kafkatopics", "kafkausers"]
     verbs: ["get", "list", "watch"]
   # Manage backup CRDs
-  - apiGroups: ["backup.strimzi.io"]
+  - apiGroups: ["kafkabackup.com"]
     resources: ["kafkabackups", "kafkarestores"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  - apiGroups: ["backup.strimzi.io"]
+  - apiGroups: ["kafkabackup.com"]
     resources: ["kafkabackups/status", "kafkarestores/status"]
     verbs: ["get", "update", "patch"]
-  - apiGroups: ["backup.strimzi.io"]
+  - apiGroups: ["kafkabackup.com"]
     resources: ["kafkabackups/finalizers", "kafkarestores/finalizers"]
     verbs: ["update"]
   # Create backup/restore jobs

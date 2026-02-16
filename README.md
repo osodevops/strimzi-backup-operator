@@ -1,28 +1,30 @@
-# Strimzi Backup Operator
+# Kafka Backup Operator for Strimzi
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Rust](https://img.shields.io/badge/rust-1.88%2B-orange.svg)](https://www.rust-lang.org)
 [![Kubernetes](https://img.shields.io/badge/kubernetes-1.27%2B-326ce5.svg)](https://kubernetes.io)
 
-A Strimzi-native Kubernetes operator for **Strimzi backup** and disaster recovery of Apache Kafka clusters. Provides dedicated CRDs for automated Kafka backup scheduling, point-in-time recovery, and multi-cloud storage — fully integrated with the Strimzi ecosystem.
+> **Disclaimer:** This project is not part of the [Strimzi](https://strimzi.io/) project or the CNCF. It is an independent, community-built operator designed to work with Strimzi-managed Kafka clusters.
 
-## Why Strimzi Backup?
+A Kubernetes operator for **Kafka backup** and disaster recovery of Strimzi-managed Apache Kafka clusters. Provides dedicated CRDs for automated Kafka backup scheduling, point-in-time recovery, and multi-cloud storage — designed for the Strimzi ecosystem.
+
+## Why Kafka Backup?
 
 Strimzi makes running Apache Kafka on Kubernetes straightforward, but **backup and disaster recovery remain unsolved problems** in the Strimzi ecosystem:
 
 - **MirrorMaker2 is not a backup** — it requires a full secondary cluster, expensive cross-cluster replication, and complex client failover procedures.
 - **PVC snapshots are fragile** — deleting Strimzi CRDs triggers garbage collection of PVCs, and node failures can result in permanent data loss.
 - **No point-in-time recovery** — there is no native mechanism to restore a Strimzi Kafka cluster to a specific moment in time.
-- **No Strimzi-native backup CRD** — backup workflows are entirely manual or require external tools that don't integrate with the Strimzi operator model.
+- **No Strimzi-compatible backup CRD** — backup workflows are entirely manual or require external tools that don't integrate with the Strimzi operator model.
 
-The **Strimzi Backup Operator** solves these problems with a purpose-built Kubernetes operator that follows Strimzi conventions and extends the Strimzi ecosystem with first-class backup and restore capabilities.
+The **Kafka Backup Operator** solves these problems with a purpose-built Kubernetes operator that follows Strimzi conventions and is designed to work with Strimzi-managed clusters, providing first-class backup and restore capabilities.
 
 ## Features
 
-- **Strimzi-native CRDs** — `KafkaBackup` and `KafkaRestore` custom resources under the `backup.strimzi.io` API group, following Strimzi conventions for status conditions, labels, and finalizers
+- **Strimzi-compatible CRDs** — `KafkaBackup` and `KafkaRestore` custom resources under the `kafkabackup.com` API group, following Strimzi conventions for status conditions, labels, and finalizers
 - **Auto-discovery of Strimzi resources** — automatically resolves bootstrap servers, TLS certificates, and KafkaUser credentials from your existing Strimzi `Kafka` CRs
-- **Scheduled Strimzi backups** — cron-based scheduling with timezone support via Kubernetes CronJobs
-- **Point-in-time recovery (PITR)** — restore your Strimzi Kafka cluster to any millisecond-precision timestamp
+- **Scheduled backups** — cron-based scheduling with timezone support via Kubernetes CronJobs
+- **Point-in-time recovery (PITR)** — restore your Kafka cluster to any millisecond-precision timestamp
 - **Multi-cloud storage** — back up to Amazon S3, Azure Blob Storage, Google Cloud Storage, or any S3-compatible store (MinIO, Ceph RGW)
 - **Topic filtering** — include/exclude topics using regex patterns
 - **Topic mapping** — rename topics during restore for migration or testing scenarios
@@ -35,14 +37,14 @@ The **Strimzi Backup Operator** solves these problems with a purpose-built Kuber
 
 ## Architecture
 
-The Strimzi Backup Operator creates Kubernetes Jobs (or CronJobs for scheduled backups) that run the `kafka-backup` CLI to perform backup and restore operations. This provides resource isolation, failure isolation, and pod-level customisation.
+The Kafka Backup Operator creates Kubernetes Jobs (or CronJobs for scheduled backups) that run the `kafka-backup` CLI to perform backup and restore operations. This provides resource isolation, failure isolation, and pod-level customisation.
 
 ```
 +------------------------------------------------------------+
 |                    Kubernetes Cluster                       |
 |                                                            |
 |  +------------------+         +------------------------+   |
-|  |  Strimzi         |         |  Strimzi Backup        |   |
+|  |  Strimzi         |         |  Kafka Backup          |   |
 |  |  Cluster         | <------ |  Operator              |   |
 |  |  Operator        |  reads  |  (watches KafkaBackup  |   |
 |  |                  |  Kafka  |   & KafkaRestore CRs)  |   |
@@ -79,15 +81,15 @@ helm repo add oso-devops https://osodevops.github.io/helm-charts/
 helm repo update
 
 # Install the operator
-helm install strimzi-backup-operator oso-devops/strimzi-backup-operator \
+helm install kafka-backup-operator oso-devops/kafka-backup-operator \
   --namespace kafka \
   --create-namespace
 ```
 
-### Create a Strimzi Backup
+### Create a Backup
 
 ```yaml
-apiVersion: backup.strimzi.io/v1alpha1
+apiVersion: kafkabackup.com/v1alpha1
 kind: KafkaBackup
 metadata:
   name: my-cluster-backup
@@ -121,10 +123,10 @@ spec:
     pruneOnSchedule: true
 ```
 
-### Restore a Strimzi Backup
+### Restore from a Backup
 
 ```yaml
-apiVersion: backup.strimzi.io/v1alpha1
+apiVersion: kafkabackup.com/v1alpha1
 kind: KafkaRestore
 metadata:
   name: my-cluster-restore
@@ -147,8 +149,8 @@ spec:
 
 | CRD | Short Name | API Group | Description |
 |-----|-----------|-----------|-------------|
-| `KafkaBackup` | `kb` | `backup.strimzi.io/v1alpha1` | Defines a Strimzi backup configuration with scheduling, retention, and storage |
-| `KafkaRestore` | `kr` | `backup.strimzi.io/v1alpha1` | Defines a restore operation with PITR, topic mapping, and consumer group restore |
+| `KafkaBackup` | `kb` | `kafkabackup.com/v1alpha1` | Defines a backup configuration with scheduling, retention, and storage |
+| `KafkaRestore` | `kr` | `kafkabackup.com/v1alpha1` | Defines a restore operation with PITR, topic mapping, and consumer group restore |
 
 ## Storage Configuration
 
@@ -207,7 +209,7 @@ storage:
       key: credentials
 ```
 
-## Strimzi Backup Authentication
+## Authentication
 
 The operator automatically discovers TLS certificates and authentication credentials from your Strimzi cluster. You can also reference `KafkaUser` CRs directly:
 
@@ -251,12 +253,12 @@ spec:
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `image.repository` | Operator container image | `ghcr.io/osodevops/strimzi-backup-operator` |
+| `image.repository` | Operator container image | `ghcr.io/osodevops/kafka-backup-operator` |
 | `image.tag` | Image tag | Chart `appVersion` |
 | `image.pullPolicy` | Image pull policy | `Always` |
 | `replicaCount` | Number of operator replicas | `1` |
 | `watchNamespaces` | Namespaces to watch (empty = all) | `[]` |
-| `logging.level` | Rust log filter | `info,strimzi_backup_operator=debug` |
+| `logging.level` | Rust log filter | `info,kafka_backup_operator=debug` |
 | `logging.format` | Log output format | `json` |
 | `serviceAccount.create` | Create a service account | `true` |
 | `azureWorkloadIdentity.enabled` | Enable Azure Workload Identity | `false` |
@@ -338,7 +340,7 @@ cargo clippy --all-features -- -D warnings
 cargo run --release --bin crdgen
 
 # Build Docker image
-docker build -t strimzi-backup-operator .
+docker build -t kafka-backup-operator .
 ```
 
 ### Local Development

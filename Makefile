@@ -3,7 +3,7 @@
 CARGO ?= cargo
 DOCKER ?= docker
 KUBECTL ?= kubectl
-IMAGE_NAME ?= ghcr.io/osodevops/strimzi-backup-operator
+IMAGE_NAME ?= ghcr.io/osodevops/kafka-backup-operator
 IMAGE_TAG ?= latest
 RUST_LOG ?= info
 
@@ -42,16 +42,16 @@ uninstall-crds:
 	$(KUBECTL) delete -f deploy/crds/ --ignore-not-found
 
 run:
-	RUST_LOG=$(RUST_LOG) $(CARGO) run --bin strimzi-backup-operator
+	RUST_LOG=$(RUST_LOG) $(CARGO) run --bin kafka-backup-operator
 
 clean:
 	$(CARGO) clean
 
 helm-template:
-	helm template strimzi-backup-operator deploy/helm/strimzi-backup-operator
+	helm template kafka-backup-operator deploy/helm/kafka-backup-operator
 
 helm-install:
-	helm install strimzi-backup-operator deploy/helm/strimzi-backup-operator
+	helm install kafka-backup-operator deploy/helm/kafka-backup-operator
 
 helm-uninstall:
-	helm uninstall strimzi-backup-operator
+	helm uninstall kafka-backup-operator

@@ -28,7 +28,7 @@ COPY src ./src
 RUN touch src/main.rs
 
 # Build the actual binary
-RUN cargo build --release --bin strimzi-backup-operator
+RUN cargo build --release --bin kafka-backup-operator
 
 # Runtime stage
 FROM debian:bookworm-slim
@@ -44,11 +44,11 @@ RUN apt-get update && apt-get install -y \
 RUN useradd -r -u 1000 -g root operator
 
 # Copy the binary
-COPY --from=builder /workspace/target/release/strimzi-backup-operator /usr/local/bin/strimzi-backup-operator
+COPY --from=builder /workspace/target/release/kafka-backup-operator /usr/local/bin/kafka-backup-operator
 
 # Set ownership and permissions
-RUN chown operator:root /usr/local/bin/strimzi-backup-operator && \
-    chmod 755 /usr/local/bin/strimzi-backup-operator
+RUN chown operator:root /usr/local/bin/kafka-backup-operator && \
+    chmod 755 /usr/local/bin/kafka-backup-operator
 
 USER 1000
 
@@ -56,4 +56,4 @@ USER 1000
 EXPOSE 9090
 
 ENTRYPOINT ["tini", "--"]
-CMD ["strimzi-backup-operator"]
+CMD ["kafka-backup-operator"]

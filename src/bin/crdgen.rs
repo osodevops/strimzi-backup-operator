@@ -2,7 +2,7 @@ use kube::CustomResourceExt;
 use std::fs;
 use std::path::Path;
 
-use strimzi_backup_operator::crd::{KafkaBackup, KafkaRestore};
+use kafka_backup_operator::crd::{KafkaBackup, KafkaRestore};
 
 fn main() {
     let crds_dir = Path::new("deploy/crds");

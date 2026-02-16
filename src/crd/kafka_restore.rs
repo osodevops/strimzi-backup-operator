@@ -11,7 +11,7 @@ use super::common::{
 /// Supports point-in-time recovery, topic mapping, and consumer group offset restore.
 #[derive(CustomResource, Clone, Debug, Deserialize, Serialize, JsonSchema)]
 #[kube(
-    group = "backup.strimzi.io",
+    group = "kafkabackup.com",
     version = "v1alpha1",
     kind = "KafkaRestore",
     plural = "kafkarestores",

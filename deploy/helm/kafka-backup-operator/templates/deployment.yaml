@@ -1,14 +1,14 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "strimzi-backup-operator.fullname" . }}
+  name: {{ include "kafka-backup-operator.fullname" . }}
   labels:
-    {{- include "strimzi-backup-operator.labels" . | nindent 4 }}
+    {{- include "kafka-backup-operator.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
   selector:
     matchLabels:
-      {{- include "strimzi-backup-operator.selectorLabels" . | nindent 6 }}
+      {{- include "kafka-backup-operator.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       {{- with .Values.podAnnotations }}
@@ -16,7 +16,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       labels:
-        {{- include "strimzi-backup-operator.selectorLabels" . | nindent 8 }}
+        {{- include "kafka-backup-operator.selectorLabels" . | nindent 8 }}
         app.kubernetes.io/component: controller
         {{- if .Values.azureWorkloadIdentity.enabled }}
         azure.workload.identity/use: "true"
@@ -29,12 +29,12 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "strimzi-backup-operator.serviceAccountName" . }}
+      serviceAccountName: {{ include "kafka-backup-operator.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: operator
-          image: {{ include "strimzi-backup-operator.image" . }}
+          image: {{ include "kafka-backup-operator.image" . }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           {{- with .Values.commandOverride }}
           command:

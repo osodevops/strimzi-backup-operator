@@ -4,15 +4,15 @@ Your release is named: {{ .Release.Name }}
 
 To verify the installation, run:
 
-  kubectl get pods -l "app.kubernetes.io/name={{ include "strimzi-backup-operator.name" . }},app.kubernetes.io/instance={{ .Release.Name }}"
+  kubectl get pods -l "app.kubernetes.io/name={{ include "kafka-backup-operator.name" . }},app.kubernetes.io/instance={{ .Release.Name }}"
 
 The operator is now watching for the following custom resources:
-  - KafkaBackup  (backup.strimzi.io/v1alpha1)
-  - KafkaRestore (backup.strimzi.io/v1alpha1)
+  - KafkaBackup  (kafkabackup.com/v1alpha1)
+  - KafkaRestore (kafkabackup.com/v1alpha1)
 
 To create a backup, apply a KafkaBackup resource:
 
-  apiVersion: backup.strimzi.io/v1alpha1
+  apiVersion: kafkabackup.com/v1alpha1
   kind: KafkaBackup
   metadata:
     name: my-cluster-backup
@@ -29,7 +29,7 @@ To create a backup, apply a KafkaBackup resource:
 
 To restore from a backup:
 
-  apiVersion: backup.strimzi.io/v1alpha1
+  apiVersion: kafkabackup.com/v1alpha1
   kind: KafkaRestore
   metadata:
     name: my-cluster-restore
@@ -40,11 +40,11 @@ To restore from a backup:
       name: my-cluster-backup
 
 For more information, visit:
-  https://github.com/osodevops/strimzi-backup-operator
+  https://github.com/osodevops/kafka-backup-operator
 
 {{- if .Values.metrics.enabled }}
 
 Metrics are available at:
-  kubectl port-forward svc/{{ include "strimzi-backup-operator.fullname" . }}-metrics {{ .Values.service.port }}:{{ .Values.service.port }}
+  kubectl port-forward svc/{{ include "kafka-backup-operator.fullname" . }}-metrics {{ .Values.service.port }}:{{ .Values.service.port }}
   curl http://localhost:{{ .Values.service.port }}/metrics
 {{- end }}

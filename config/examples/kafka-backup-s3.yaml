@@ -1,4 +1,4 @@
-apiVersion: backup.strimzi.io/v1alpha1
+apiVersion: kafkabackup.com/v1alpha1
 kind: KafkaBackup
 metadata:
   name: daily-backup

@@ -13,7 +13,7 @@ pub fn build_labels(cr_name: &str, cluster_name: &str, job_type: &str) -> BTreeM
     let mut labels = BTreeMap::new();
     labels.insert(
         "app.kubernetes.io/name".to_string(),
-        "strimzi-backup-operator".to_string(),
+        "kafka-backup-operator".to_string(),
     );
     labels.insert(
         "app.kubernetes.io/instance".to_string(),
@@ -21,15 +21,15 @@ pub fn build_labels(cr_name: &str, cluster_name: &str, job_type: &str) -> BTreeM
     );
     labels.insert(
         "app.kubernetes.io/part-of".to_string(),
-        "strimzi-backup".to_string(),
+        "kafka-backup".to_string(),
     );
     labels.insert(
         "app.kubernetes.io/managed-by".to_string(),
-        "strimzi-backup-operator".to_string(),
+        "kafka-backup-operator".to_string(),
     );
     labels.insert("strimzi.io/cluster".to_string(), cluster_name.to_string());
-    labels.insert("backup.strimzi.io/type".to_string(), job_type.to_string());
-    labels.insert(format!("backup.strimzi.io/{job_type}"), cr_name.to_string());
+    labels.insert("kafkabackup.com/type".to_string(), job_type.to_string());
+    labels.insert(format!("kafkabackup.com/{job_type}"), cr_name.to_string());
     labels
 }
 

@@ -163,12 +163,12 @@ jobs:
         with:
           name: v${{ needs.validate.outputs.version }}
           body: |
-            ## Strimzi Backup Operator v${{ needs.validate.outputs.version }}
+            ## Kafka Backup Operator for Strimzi v${{ needs.validate.outputs.version }}
 
             ### Docker Images
 
             ```bash
-            docker pull ghcr.io/osodevops/strimzi-backup-operator:${{ needs.validate.outputs.version }}
+            docker pull ghcr.io/osodevops/kafka-backup-operator:${{ needs.validate.outputs.version }}
             ```
 
             ### Installation
@@ -179,7 +179,7 @@ jobs:
             helm repo update
 
             # Install the operator
-            helm install strimzi-backup-operator oso-devops/strimzi-backup-operator \
+            helm install kafka-backup-operator oso-devops/kafka-backup-operator \
               --namespace kafka \
               --create-namespace \
               --version ${{ needs.validate.outputs.version }}
@@ -214,6 +214,6 @@ jobs:
         with:
           token: ${{ secrets.HELM_CHARTS_PAT }}
           repository: osodevops/helm-charts
-          event-type: update-strimzi-backup-operator
+          event-type: update-kafka-backup-operator
           client-payload: '{"version": "${{ needs.validate.outputs.version }}"}'
         continue-on-error: true

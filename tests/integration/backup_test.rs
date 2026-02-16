@@ -1,10 +1,10 @@
-use strimzi_backup_operator::adapters::backup_config::build_backup_config_yaml;
-use strimzi_backup_operator::crd::common::*;
-use strimzi_backup_operator::crd::kafka_backup::*;
-use strimzi_backup_operator::crd::KafkaBackup;
-use strimzi_backup_operator::jobs::backup_job::build_backup_job;
-use strimzi_backup_operator::strimzi::kafka_cr::ResolvedKafkaCluster;
-use strimzi_backup_operator::strimzi::kafka_user::ResolvedAuth;
+use kafka_backup_operator::adapters::backup_config::build_backup_config_yaml;
+use kafka_backup_operator::crd::common::*;
+use kafka_backup_operator::crd::kafka_backup::*;
+use kafka_backup_operator::crd::KafkaBackup;
+use kafka_backup_operator::jobs::backup_job::build_backup_job;
+use kafka_backup_operator::strimzi::kafka_cr::ResolvedKafkaCluster;
+use kafka_backup_operator::strimzi::kafka_user::ResolvedAuth;
 
 fn sample_backup() -> KafkaBackup {
     let spec = KafkaBackupSpec {
@@ -114,7 +114,7 @@ fn test_backup_job_creation() {
     );
     assert_eq!(
         labels.get("app.kubernetes.io/part-of"),
-        Some(&"strimzi-backup".to_string())
+        Some(&"kafka-backup".to_string())
     );
 
     let owner_refs = metadata.owner_references.as_ref().unwrap();

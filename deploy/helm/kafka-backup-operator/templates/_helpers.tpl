@@ -1,14 +1,14 @@
 {{/*
 Expand the name of the chart.
 */}}
-{{- define "strimzi-backup-operator.name" -}}
+{{- define "kafka-backup-operator.name" -}}
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Create a default fully qualified app name.
 */}}
-{{- define "strimzi-backup-operator.fullname" -}}
+{{- define "kafka-backup-operator.fullname" -}}
 {{- if .Values.fullnameOverride }}
 {{- .Values.fullnameOverride | trunc 63 | trimSuffix "-" }}
 {{- else }}
@@ -24,38 +24,38 @@ Create a default fully qualified app name.
 {{/*
 Create chart name and version as used by the chart label.
 */}}
-{{- define "strimzi-backup-operator.chart" -}}
+{{- define "kafka-backup-operator.chart" -}}
 {{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
 Common labels
 */}}
-{{- define "strimzi-backup-operator.labels" -}}
-helm.sh/chart: {{ include "strimzi-backup-operator.chart" . }}
-{{ include "strimzi-backup-operator.selectorLabels" . }}
+{{- define "kafka-backup-operator.labels" -}}
+helm.sh/chart: {{ include "kafka-backup-operator.chart" . }}
+{{ include "kafka-backup-operator.selectorLabels" . }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
 app.kubernetes.io/managed-by: {{ .Release.Service }}
-app.kubernetes.io/part-of: strimzi-backup
+app.kubernetes.io/part-of: kafka-backup
 app.kubernetes.io/component: controller
 {{- end }}
 
 {{/*
 Selector labels
 */}}
-{{- define "strimzi-backup-operator.selectorLabels" -}}
-app.kubernetes.io/name: {{ include "strimzi-backup-operator.name" . }}
+{{- define "kafka-backup-operator.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "kafka-backup-operator.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
 Create the name of the service account to use
 */}}
-{{- define "strimzi-backup-operator.serviceAccountName" -}}
+{{- define "kafka-backup-operator.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
-{{- default (include "strimzi-backup-operator.fullname" .) .Values.serviceAccount.name }}
+{{- default (include "kafka-backup-operator.fullname" .) .Values.serviceAccount.name }}
 {{- else }}
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
@@ -64,6 +64,6 @@ Create the name of the service account to use
 {{/*
 Container image
 */}}
-{{- define "strimzi-backup-operator.image" -}}
+{{- define "kafka-backup-operator.image" -}}
 {{- printf "%s:%s" .Values.image.repository (default .Chart.AppVersion .Values.image.tag) }}
 {{- end }}

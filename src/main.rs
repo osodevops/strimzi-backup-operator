@@ -6,8 +6,8 @@ use futures::future::join3;
 use kube::Client;
 use tracing::{error, info};
 
-use strimzi_backup_operator::controllers::{backup, restore};
-use strimzi_backup_operator::metrics::prometheus::MetricsState;
+use kafka_backup_operator::controllers::{backup, restore};
+use kafka_backup_operator::metrics::prometheus::MetricsState;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -21,7 +21,7 @@ async fn main() -> anyhow::Result<()> {
 
     info!(
         version = env!("CARGO_PKG_VERSION"),
-        "Starting strimzi-backup-operator"
+        "Starting kafka-backup-operator"
     );
 
     let client = Client::try_default().await?;
