@@ -183,15 +183,15 @@ mod tests {
         let config = build_storage_config(&storage).unwrap();
         let mapping = config.as_mapping().unwrap();
         assert_eq!(
-            mapping.get(&Value::String("type".to_string())),
+            mapping.get(Value::String("type".to_string())),
             Some(&Value::String("s3".to_string()))
         );
         assert_eq!(
-            mapping.get(&Value::String("bucket".to_string())),
+            mapping.get(Value::String("bucket".to_string())),
             Some(&Value::String("my-bucket".to_string()))
         );
         assert_eq!(
-            mapping.get(&Value::String("region".to_string())),
+            mapping.get(Value::String("region".to_string())),
             Some(&Value::String("us-east-1".to_string()))
         );
     }

@@ -240,7 +240,7 @@ mod tests {
         let state = MetricsState::new();
         let output = state.gather();
         // Should contain metric definitions even without data
-        assert!(output.is_empty() || output.contains("strimzi_backup") || output.len() >= 0);
+        assert!(output.is_empty() || output.contains("strimzi_backup"));
     }
 
     #[test]
