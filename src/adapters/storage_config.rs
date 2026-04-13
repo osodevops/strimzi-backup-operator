@@ -9,6 +9,7 @@ pub fn build_storage_config(storage: &StorageSpec) -> Result<Value> {
         StorageType::S3 => build_s3_config(storage),
         StorageType::Azure => build_azure_config(storage),
         StorageType::Gcs => build_gcs_config(storage),
+        StorageType::Filesystem => build_filesystem_config(storage),
     }
 }
 
@@ -19,7 +20,7 @@ fn build_s3_config(storage: &StorageSpec) -> Result<Value> {
 
     let mut config = serde_yaml::Mapping::new();
     config.insert(
-        Value::String("type".to_string()),
+        Value::String("backend".to_string()),
         Value::String("s3".to_string()),
     );
     config.insert(
@@ -50,17 +51,29 @@ fn build_s3_config(storage: &StorageSpec) -> Result<Value> {
 
     if let Some(force_path_style) = s3.force_path_style {
         config.insert(
-            Value::String("force_path_style".to_string()),
+            Value::String("path_style".to_string()),
             Value::Bool(force_path_style),
         );
     }
 
-    // Credentials are mounted as environment variables or files by the Job
-    // The path is set to /credentials/ in the Job spec
-    if s3.credentials_secret.is_some() {
+    if let Some(allow_http) = s3.allow_http {
         config.insert(
-            Value::String("credentials_file".to_string()),
-            Value::String("/credentials/credentials".to_string()),
+            Value::String("allow_http".to_string()),
+            Value::Bool(allow_http),
+        );
+    }
+
+    if s3.access_key_secret.is_some() {
+        config.insert(
+            Value::String("access_key".to_string()),
+            Value::String("${AWS_ACCESS_KEY_ID}".to_string()),
+        );
+    }
+
+    if s3.secret_key_secret.is_some() {
+        config.insert(
+            Value::String("secret_key".to_string()),
+            Value::String("${AWS_SECRET_ACCESS_KEY}".to_string()),
         );
     }
 
@@ -74,15 +87,15 @@ fn build_azure_config(storage: &StorageSpec) -> Result<Value> {
 
     let mut config = serde_yaml::Mapping::new();
     config.insert(
-        Value::String("type".to_string()),
+        Value::String("backend".to_string()),
         Value::String("azure".to_string()),
     );
     config.insert(
-        Value::String("container".to_string()),
+        Value::String("container_name".to_string()),
         Value::String(azure.container.clone()),
     );
     config.insert(
-        Value::String("storage_account".to_string()),
+        Value::String("account_name".to_string()),
         Value::String(azure.storage_account.clone()),
     );
 
@@ -93,10 +106,52 @@ fn build_azure_config(storage: &StorageSpec) -> Result<Value> {
         );
     }
 
-    if azure.credentials_secret.is_some() {
+    if azure.credentials_secret.is_some() || azure.account_key_secret.is_some() {
         config.insert(
-            Value::String("credentials_file".to_string()),
-            Value::String("/credentials/credentials".to_string()),
+            Value::String("account_key".to_string()),
+            Value::String("${AZURE_STORAGE_KEY}".to_string()),
+        );
+    }
+
+    if azure.sas_token_secret.is_some() {
+        config.insert(
+            Value::String("sas_token".to_string()),
+            Value::String("${AZURE_STORAGE_SAS_TOKEN}".to_string()),
+        );
+    }
+
+    if azure.client_secret_secret.is_some() {
+        config.insert(
+            Value::String("client_secret".to_string()),
+            Value::String("${AZURE_CLIENT_SECRET}".to_string()),
+        );
+    }
+
+    if let Some(endpoint) = &azure.endpoint {
+        config.insert(
+            Value::String("endpoint".to_string()),
+            Value::String(endpoint.clone()),
+        );
+    }
+
+    if let Some(use_workload_identity) = azure.use_workload_identity {
+        config.insert(
+            Value::String("use_workload_identity".to_string()),
+            Value::Bool(use_workload_identity),
+        );
+    }
+
+    if let Some(client_id) = &azure.client_id {
+        config.insert(
+            Value::String("client_id".to_string()),
+            Value::String(client_id.clone()),
+        );
+    }
+
+    if let Some(tenant_id) = &azure.tenant_id {
+        config.insert(
+            Value::String("tenant_id".to_string()),
+            Value::String(tenant_id.clone()),
         );
     }
 
@@ -110,7 +165,7 @@ fn build_gcs_config(storage: &StorageSpec) -> Result<Value> {
 
     let mut config = serde_yaml::Mapping::new();
     config.insert(
-        Value::String("type".to_string()),
+        Value::String("backend".to_string()),
         Value::String("gcs".to_string()),
     );
     config.insert(
@@ -127,10 +182,35 @@ fn build_gcs_config(storage: &StorageSpec) -> Result<Value> {
 
     if gcs.credentials_secret.is_some() {
         config.insert(
-            Value::String("credentials_file".to_string()),
+            Value::String("service_account_path".to_string()),
             Value::String("/credentials/credentials".to_string()),
         );
+    } else if let Some(service_account_path) = &gcs.service_account_path {
+        config.insert(
+            Value::String("service_account_path".to_string()),
+            Value::String(service_account_path.clone()),
+        );
     }
+
+    Ok(Value::Mapping(config))
+}
+
+fn build_filesystem_config(storage: &StorageSpec) -> Result<Value> {
+    let filesystem = storage.filesystem.as_ref().ok_or_else(|| {
+        Error::InvalidConfig(
+            "Storage type is Filesystem but filesystem config is missing".to_string(),
+        )
+    })?;
+
+    let mut config = serde_yaml::Mapping::new();
+    config.insert(
+        Value::String("backend".to_string()),
+        Value::String("filesystem".to_string()),
+    );
+    config.insert(
+        Value::String("path".to_string()),
+        Value::String(filesystem.path.clone()),
+    );
 
     Ok(Value::Mapping(config))
 }
@@ -153,6 +233,7 @@ pub fn get_storage_credentials_secret(storage: &StorageSpec) -> Option<(String, 
             .as_ref()
             .and_then(|g| g.credentials_secret.as_ref())
             .map(|s| (s.name.clone(), s.key.clone())),
+        StorageType::Filesystem => None,
     }
 }
 
@@ -171,19 +252,23 @@ mod tests {
                 prefix: Some("backups/".to_string()),
                 endpoint: None,
                 force_path_style: None,
+                allow_http: None,
                 credentials_secret: Some(SecretKeyRef {
                     name: "aws-creds".to_string(),
                     key: "credentials".to_string(),
                 }),
+                access_key_secret: None,
+                secret_key_secret: None,
             }),
             azure: None,
             gcs: None,
+            filesystem: None,
         };
 
         let config = build_storage_config(&storage).unwrap();
         let mapping = config.as_mapping().unwrap();
         assert_eq!(
-            mapping.get(Value::String("type".to_string())),
+            mapping.get(Value::String("backend".to_string())),
             Some(&Value::String("s3".to_string()))
         );
         assert_eq!(

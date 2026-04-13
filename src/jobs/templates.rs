@@ -1,10 +1,13 @@
 use std::collections::BTreeMap;
 
 use k8s_openapi::api::core::v1::{
-    ConfigMapVolumeSource, KeyToPath, PodSpec, SecretVolumeSource, Volume, VolumeMount,
+    ConfigMapVolumeSource, EnvVar, EnvVarSource, KeyToPath, ObjectFieldSelector, PodSpec,
+    SecretKeySelector, SecretVolumeSource, Volume, VolumeMount,
 };
 
-use crate::crd::common::{PodTemplateSpec as CrdPodTemplate, StorageSpec, StorageType};
+use crate::crd::common::{
+    PodTemplateSpec as CrdPodTemplate, SecretKeyRef, StorageSpec, StorageType,
+};
 use crate::strimzi::kafka_user::ResolvedAuth;
 use crate::strimzi::tls;
 
@@ -38,11 +41,13 @@ pub fn build_volumes_and_mounts(
     config_map_name: &str,
     _config_key: &str,
     cluster_name: &str,
+    tls_enabled: bool,
     auth: &ResolvedAuth,
     storage: &StorageSpec,
-) -> (Vec<Volume>, Vec<VolumeMount>) {
+) -> (Vec<Volume>, Vec<VolumeMount>, Vec<EnvVar>) {
     let mut volumes = Vec::new();
     let mut mounts = Vec::new();
+    let mut env = Vec::new();
 
     // Config volume (from ConfigMap)
     volumes.push(Volume {
@@ -61,26 +66,28 @@ pub fn build_volumes_and_mounts(
     });
 
     // Cluster CA certificate volume
-    let ca_secret = tls::cluster_ca_secret_name(cluster_name);
-    volumes.push(Volume {
-        name: "cluster-ca".to_string(),
-        secret: Some(SecretVolumeSource {
-            secret_name: Some(ca_secret),
-            items: Some(vec![KeyToPath {
-                key: "ca.crt".to_string(),
-                path: "ca.crt".to_string(),
+    if tls_enabled || matches!(auth, ResolvedAuth::Tls { .. }) {
+        let ca_secret = tls::cluster_ca_secret_name(cluster_name);
+        volumes.push(Volume {
+            name: "cluster-ca".to_string(),
+            secret: Some(SecretVolumeSource {
+                secret_name: Some(ca_secret),
+                items: Some(vec![KeyToPath {
+                    key: "ca.crt".to_string(),
+                    path: "ca.crt".to_string(),
+                    ..Default::default()
+                }]),
                 ..Default::default()
-            }]),
+            }),
             ..Default::default()
-        }),
-        ..Default::default()
-    });
-    mounts.push(VolumeMount {
-        name: "cluster-ca".to_string(),
-        mount_path: "/certs/cluster-ca".to_string(),
-        read_only: Some(true),
-        ..Default::default()
-    });
+        });
+        mounts.push(VolumeMount {
+            name: "cluster-ca".to_string(),
+            mount_path: "/certs/cluster-ca".to_string(),
+            read_only: Some(true),
+            ..Default::default()
+        });
+    }
 
     // User credentials volume (TLS or SCRAM)
     match auth {
@@ -105,6 +112,11 @@ pub fn build_volumes_and_mounts(
             password_key,
             ..
         } => {
+            env.push(secret_env_var(
+                "KAFKA_SASL_PASSWORD",
+                secret_name,
+                password_key,
+            ));
             volumes.push(Volume {
                 name: "user-certs".to_string(),
                 secret: Some(SecretVolumeSource {
@@ -129,50 +141,148 @@ pub fn build_volumes_and_mounts(
     }
 
     // Storage credentials volume
-    let cred_secret = get_credentials_secret_name(storage);
-    if let Some((secret_name, secret_key)) = cred_secret {
-        volumes.push(Volume {
-            name: "storage-credentials".to_string(),
-            secret: Some(SecretVolumeSource {
-                secret_name: Some(secret_name),
-                items: Some(vec![KeyToPath {
-                    key: secret_key,
-                    path: "credentials".to_string(),
-                    ..Default::default()
-                }]),
+    add_storage_credentials(storage, &mut volumes, &mut mounts, &mut env);
+
+    (volumes, mounts, env)
+}
+
+/// Build an env var whose value is the owning Job name.
+pub fn job_name_env_var(name: &str) -> EnvVar {
+    EnvVar {
+        name: name.to_string(),
+        value_from: Some(EnvVarSource {
+            field_ref: Some(ObjectFieldSelector {
+                field_path: "metadata.labels['batch.kubernetes.io/job-name']".to_string(),
                 ..Default::default()
             }),
             ..Default::default()
-        });
-        mounts.push(VolumeMount {
-            name: "storage-credentials".to_string(),
-            mount_path: "/credentials".to_string(),
-            read_only: Some(true),
-            ..Default::default()
-        });
+        }),
+        ..Default::default()
     }
-
-    (volumes, mounts)
 }
 
-/// Get the storage credentials secret name if configured
-fn get_credentials_secret_name(storage: &StorageSpec) -> Option<(String, String)> {
+fn add_storage_credentials(
+    storage: &StorageSpec,
+    volumes: &mut Vec<Volume>,
+    mounts: &mut Vec<VolumeMount>,
+    env: &mut Vec<EnvVar>,
+) {
     match storage.storage_type {
-        StorageType::S3 => storage
-            .s3
-            .as_ref()
-            .and_then(|s| s.credentials_secret.as_ref())
-            .map(|s| (s.name.clone(), s.key.clone())),
-        StorageType::Azure => storage
-            .azure
-            .as_ref()
-            .and_then(|a| a.credentials_secret.as_ref())
-            .map(|s| (s.name.clone(), s.key.clone())),
-        StorageType::Gcs => storage
-            .gcs
-            .as_ref()
-            .and_then(|g| g.credentials_secret.as_ref())
-            .map(|s| (s.name.clone(), s.key.clone())),
+        StorageType::S3 => {
+            if let Some(s3) = &storage.s3 {
+                if let Some(secret) = &s3.access_key_secret {
+                    env.push(secret_env_var(
+                        "AWS_ACCESS_KEY_ID",
+                        &secret.name,
+                        &secret.key,
+                    ));
+                }
+                if let Some(secret) = &s3.secret_key_secret {
+                    env.push(secret_env_var(
+                        "AWS_SECRET_ACCESS_KEY",
+                        &secret.name,
+                        &secret.key,
+                    ));
+                }
+                if let Some(secret) = &s3.credentials_secret {
+                    add_credentials_file_volume(secret, volumes, mounts);
+                    env.push(static_env_var(
+                        "AWS_SHARED_CREDENTIALS_FILE",
+                        "/credentials/credentials",
+                    ));
+                }
+            }
+        }
+        StorageType::Azure => {
+            if let Some(azure) = &storage.azure {
+                if let Some(secret) = azure
+                    .account_key_secret
+                    .as_ref()
+                    .or(azure.credentials_secret.as_ref())
+                {
+                    env.push(secret_env_var(
+                        "AZURE_STORAGE_KEY",
+                        &secret.name,
+                        &secret.key,
+                    ));
+                }
+                if let Some(secret) = &azure.sas_token_secret {
+                    env.push(secret_env_var(
+                        "AZURE_STORAGE_SAS_TOKEN",
+                        &secret.name,
+                        &secret.key,
+                    ));
+                }
+                if let Some(secret) = &azure.client_secret_secret {
+                    env.push(secret_env_var(
+                        "AZURE_CLIENT_SECRET",
+                        &secret.name,
+                        &secret.key,
+                    ));
+                }
+            }
+        }
+        StorageType::Gcs => {
+            if let Some(gcs) = &storage.gcs {
+                if let Some(secret) = &gcs.credentials_secret {
+                    add_credentials_file_volume(secret, volumes, mounts);
+                    env.push(static_env_var(
+                        "GOOGLE_APPLICATION_CREDENTIALS",
+                        "/credentials/credentials",
+                    ));
+                }
+            }
+        }
+        StorageType::Filesystem => {}
+    }
+}
+
+fn add_credentials_file_volume(
+    secret: &SecretKeyRef,
+    volumes: &mut Vec<Volume>,
+    mounts: &mut Vec<VolumeMount>,
+) {
+    volumes.push(Volume {
+        name: "storage-credentials".to_string(),
+        secret: Some(SecretVolumeSource {
+            secret_name: Some(secret.name.clone()),
+            items: Some(vec![KeyToPath {
+                key: secret.key.clone(),
+                path: "credentials".to_string(),
+                ..Default::default()
+            }]),
+            ..Default::default()
+        }),
+        ..Default::default()
+    });
+    mounts.push(VolumeMount {
+        name: "storage-credentials".to_string(),
+        mount_path: "/credentials".to_string(),
+        read_only: Some(true),
+        ..Default::default()
+    });
+}
+
+fn secret_env_var(name: &str, secret_name: &str, secret_key: &str) -> EnvVar {
+    EnvVar {
+        name: name.to_string(),
+        value_from: Some(EnvVarSource {
+            secret_key_ref: Some(SecretKeySelector {
+                name: secret_name.to_string(),
+                key: secret_key.to_string(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        }),
+        ..Default::default()
+    }
+}
+
+fn static_env_var(name: &str, value: &str) -> EnvVar {
+    EnvVar {
+        name: name.to_string(),
+        value: Some(value.to_string()),
+        ..Default::default()
     }
 }
 

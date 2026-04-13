@@ -115,14 +115,14 @@ pub struct SecretKeyRef {
     pub key: String,
 }
 
-/// Topic selection with include/exclude regex patterns
+/// Topic selection with include/exclude glob patterns
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct TopicSelection {
-    /// Regex patterns for topics to include
+    /// Glob patterns for topics to include
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub include: Vec<String>,
-    /// Regex patterns for topics to exclude
+    /// Glob patterns for topics to exclude
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub exclude: Vec<String>,
 }
@@ -137,6 +137,69 @@ pub struct ConsumerGroupSelection {
     /// Regex patterns for consumer groups to exclude
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub exclude: Vec<String>,
+}
+
+/// Kafka TCP connection tuning passed through to kafka-backup.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct KafkaConnectionSpec {
+    /// Enable TCP keepalive
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tcp_keepalive: Option<bool>,
+    /// Seconds before the first keepalive probe
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub keepalive_time_secs: Option<u64>,
+    /// Seconds between keepalive probes
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub keepalive_interval_secs: Option<u64>,
+    /// Enable TCP_NODELAY
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tcp_nodelay: Option<bool>,
+    /// TCP connections to keep per broker
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub connections_per_broker: Option<usize>,
+}
+
+/// Metrics HTTP server configuration for kafka-backup job pods.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct MetricsSpec {
+    /// Enable the kafka-backup metrics server
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
+    /// Metrics HTTP port
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub port: Option<u16>,
+    /// Metrics bind address
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub bind_address: Option<String>,
+    /// Metrics endpoint path
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub path: Option<String>,
+    /// Metrics recalculation interval in milliseconds
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub update_interval_ms: Option<u64>,
+    /// Maximum topic/partition labels emitted by the core metrics registry
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_partition_labels: Option<usize>,
+}
+
+/// Offset storage configuration for continuous backup progress.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct OffsetStorageSpec {
+    /// Offset storage backend: sqlite or memory
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub backend: Option<String>,
+    /// Path to the local SQLite database file
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub db_path: Option<String>,
+    /// Remote S3 key used to sync the offset database
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub s3_key: Option<String>,
+    /// Remote sync interval in seconds
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sync_interval_secs: Option<u64>,
 }
 
 // --- Storage types ---
@@ -157,6 +220,9 @@ pub struct StorageSpec {
     /// Google Cloud Storage configuration
     #[serde(skip_serializing_if = "Option::is_none")]
     pub gcs: Option<GcsStorageSpec>,
+    /// Filesystem storage configuration
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub filesystem: Option<FilesystemStorageSpec>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, JsonSchema, PartialEq)]
@@ -165,6 +231,7 @@ pub enum StorageType {
     S3,
     Azure,
     Gcs,
+    Filesystem,
 }
 
 /// S3-compatible storage configuration
@@ -185,9 +252,18 @@ pub struct S3StorageSpec {
     /// Force path-style access (required for MinIO)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub force_path_style: Option<bool>,
+    /// Allow insecure HTTP connections
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub allow_http: Option<bool>,
     /// Secret containing AWS credentials
     #[serde(skip_serializing_if = "Option::is_none")]
     pub credentials_secret: Option<SecretKeyRef>,
+    /// Secret key containing AWS access key ID
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub access_key_secret: Option<SecretKeyRef>,
+    /// Secret key containing AWS secret access key
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub secret_key_secret: Option<SecretKeyRef>,
 }
 
 /// Azure Blob Storage configuration
@@ -204,6 +280,27 @@ pub struct AzureStorageSpec {
     /// Secret containing Azure credentials
     #[serde(skip_serializing_if = "Option::is_none")]
     pub credentials_secret: Option<SecretKeyRef>,
+    /// Storage account key secret
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub account_key_secret: Option<SecretKeyRef>,
+    /// SAS token secret
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sas_token_secret: Option<SecretKeyRef>,
+    /// Service principal client secret
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_secret_secret: Option<SecretKeyRef>,
+    /// Custom endpoint for sovereign clouds
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub endpoint: Option<String>,
+    /// Enable Azure Workload Identity
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub use_workload_identity: Option<bool>,
+    /// Azure AD client ID
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub client_id: Option<String>,
+    /// Azure AD tenant ID
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tenant_id: Option<String>,
 }
 
 /// Google Cloud Storage configuration
@@ -218,6 +315,17 @@ pub struct GcsStorageSpec {
     /// Secret containing GCS service account JSON
     #[serde(skip_serializing_if = "Option::is_none")]
     pub credentials_secret: Option<SecretKeyRef>,
+    /// Path to a mounted service account JSON file
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub service_account_path: Option<String>,
+}
+
+/// Local filesystem storage configuration.
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct FilesystemStorageSpec {
+    /// Base path for backup data
+    pub path: String,
 }
 
 // --- Pod template types ---

@@ -102,15 +102,18 @@ spec:
     s3:
       bucket: my-kafka-backups
       region: eu-west-1
-      credentialsSecret:
+      accessKeySecret:
         name: aws-credentials
-        key: credentials
+        key: access-key-id
+      secretKeySecret:
+        name: aws-credentials
+        key: secret-access-key
   topics:
     include:
-      - "orders.*"
-      - "payments.*"
+      - "orders-*"
+      - "payments-*"
     exclude:
-      - "__.*"
+      - "__*"
   backup:
     compression: zstd
     parallelism: 4
@@ -163,9 +166,12 @@ storage:
     bucket: my-kafka-backups
     region: eu-west-1
     prefix: production/
-    credentialsSecret:
+    accessKeySecret:
       name: aws-credentials
-      key: credentials
+      key: access-key-id
+    secretKeySecret:
+      name: aws-credentials
+      key: secret-access-key
 ```
 
 ### Azure Blob Storage
@@ -177,9 +183,9 @@ storage:
     storageAccount: myaccount
     container: kafka-backups
     prefix: production/
-    credentialsSecret:
+    accountKeySecret:
       name: azure-credentials
-      key: connection-string
+      key: account-key
 ```
 
 ### Google Cloud Storage
@@ -204,9 +210,13 @@ storage:
     bucket: kafka-backups
     endpoint: https://minio.example.com
     forcePathStyle: true
-    credentialsSecret:
+    allowHttp: false
+    accessKeySecret:
       name: minio-credentials
-      key: credentials
+      key: access-key-id
+    secretKeySecret:
+      name: minio-credentials
+      key: secret-access-key
 ```
 
 ## Authentication

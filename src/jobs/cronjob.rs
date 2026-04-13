@@ -10,7 +10,8 @@ use crate::strimzi::kafka_cr::ResolvedKafkaCluster;
 use crate::strimzi::kafka_user::ResolvedAuth;
 
 use super::templates::{
-    apply_pod_template, build_labels, build_volumes_and_mounts, merge_template_labels,
+    apply_pod_template, build_labels, build_volumes_and_mounts, job_name_env_var,
+    merge_template_labels,
 };
 
 /// Build a Kubernetes CronJob for scheduled backups
@@ -35,13 +36,15 @@ pub fn build_backup_cronjob(
     merge_template_labels(&mut labels, backup.spec.template.as_ref());
 
     // Build volumes and mounts
-    let (volumes, volume_mounts) = build_volumes_and_mounts(
+    let (volumes, volume_mounts, mut env) = build_volumes_and_mounts(
         config_map_name,
         "backup.yaml",
         &cluster.name,
+        cluster.tls_enabled,
         auth,
         &backup.spec.storage,
     );
+    env.push(job_name_env_var("BACKUP_ID"));
 
     // Build container
     let container = Container {
@@ -53,6 +56,7 @@ pub fn build_backup_cronjob(
             "--config".to_string(),
             "/config/backup.yaml".to_string(),
         ]),
+        env: if env.is_empty() { None } else { Some(env) },
         volume_mounts: Some(volume_mounts),
         resources: backup.spec.resources.as_ref().map(|r| r.to_k8s()),
         ..Default::default()

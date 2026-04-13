@@ -100,10 +100,29 @@ spec:
                 description: Backup options (compression, encryption, parallelism)
                 nullable: true
                 properties:
+                  checkpointIntervalSecs:
+                    description: Checkpoint interval in seconds
+                    format: uint64
+                    minimum: 0.0
+                    nullable: true
+                    type: integer
                   compression:
-                    description: 'Compression algorithm: none, gzip, snappy, lz4, zstd'
+                    description: 'Compression algorithm: none, lz4, zstd'
                     nullable: true
                     type: string
+                  compressionLevel:
+                    description: 'Compression level (zstd: 1-22)'
+                    format: int32
+                    nullable: true
+                    type: integer
+                  consumerGroupSnapshot:
+                    description: Snapshot consumer group offsets after each backup cycle
+                    nullable: true
+                    type: boolean
+                  continuous:
+                    description: Run continuously instead of one-shot
+                    nullable: true
+                    type: boolean
                   encryption:
                     description: Encryption configuration
                     nullable: true
@@ -127,9 +146,34 @@ spec:
                         - name
                         type: object
                     type: object
+                  includeInternalTopics:
+                    description: Include internal Kafka topics
+                    nullable: true
+                    type: boolean
+                  includeOffsetHeaders:
+                    description: Include original Kafka offset headers in backup records
+                    nullable: true
+                    type: boolean
+                  internalTopics:
+                    description: Internal topics to include
+                    items:
+                      type: string
+                    type: array
                   parallelism:
                     description: 'Number of concurrent partition backup threads (default: 4)'
                     format: int32
+                    nullable: true
+                    type: integer
+                  pollIntervalMs:
+                    description: Continuous-mode poll interval in milliseconds
+                    format: uint64
+                    minimum: 0.0
+                    nullable: true
+                    type: integer
+                  segmentMaxIntervalMs:
+                    description: Maximum segment time interval in milliseconds
+                    format: uint64
+                    minimum: 0.0
                     nullable: true
                     type: integer
                   segmentSize:
@@ -137,6 +181,55 @@ spec:
                     format: int64
                     nullable: true
                     type: integer
+                  sourceClusterId:
+                    description: Source cluster identifier written to record headers
+                    nullable: true
+                    type: string
+                  startOffset:
+                    description: 'Starting offset for backups: earliest or latest'
+                    nullable: true
+                    type: string
+                  stopAtCurrentOffsets:
+                    description: Snapshot current high watermarks and exit when caught up
+                    nullable: true
+                    type: boolean
+                  syncIntervalSecs:
+                    description: Remote offset database sync interval in seconds
+                    format: uint64
+                    minimum: 0.0
+                    nullable: true
+                    type: integer
+                type: object
+              connection:
+                description: Kafka connection tuning for the source cluster
+                nullable: true
+                properties:
+                  connectionsPerBroker:
+                    description: TCP connections to keep per broker
+                    format: uint
+                    minimum: 0.0
+                    nullable: true
+                    type: integer
+                  keepaliveIntervalSecs:
+                    description: Seconds between keepalive probes
+                    format: uint64
+                    minimum: 0.0
+                    nullable: true
+                    type: integer
+                  keepaliveTimeSecs:
+                    description: Seconds before the first keepalive probe
+                    format: uint64
+                    minimum: 0.0
+                    nullable: true
+                    type: integer
+                  tcpKeepalive:
+                    description: Enable TCP keepalive
+                    nullable: true
+                    type: boolean
+                  tcpNodelay:
+                    description: Enable TCP_NODELAY
+                    nullable: true
+                    type: boolean
                 type: object
               consumerGroups:
                 description: Consumer group selection
@@ -157,6 +250,64 @@ spec:
                 description: 'Container image for the backup job (default: ghcr.io/osodevops/kafka-backup:latest)'
                 nullable: true
                 type: string
+              metrics:
+                description: Metrics configuration for backup job pods
+                nullable: true
+                properties:
+                  bindAddress:
+                    description: Metrics bind address
+                    nullable: true
+                    type: string
+                  enabled:
+                    description: Enable the kafka-backup metrics server
+                    nullable: true
+                    type: boolean
+                  maxPartitionLabels:
+                    description: Maximum topic/partition labels emitted by the core metrics registry
+                    format: uint
+                    minimum: 0.0
+                    nullable: true
+                    type: integer
+                  path:
+                    description: Metrics endpoint path
+                    nullable: true
+                    type: string
+                  port:
+                    description: Metrics HTTP port
+                    format: uint16
+                    minimum: 0.0
+                    nullable: true
+                    type: integer
+                  updateIntervalMs:
+                    description: Metrics recalculation interval in milliseconds
+                    format: uint64
+                    minimum: 0.0
+                    nullable: true
+                    type: integer
+                type: object
+              offsetStorage:
+                description: Offset storage configuration for continuous backup progress
+                nullable: true
+                properties:
+                  backend:
+                    description: 'Offset storage backend: sqlite or memory'
+                    nullable: true
+                    type: string
+                  dbPath:
+                    description: Path to the local SQLite database file
+                    nullable: true
+                    type: string
+                  s3Key:
+                    description: Remote S3 key used to sync the offset database
+                    nullable: true
+                    type: string
+                  syncIntervalSecs:
+                    description: Remote sync interval in seconds
+                    format: uint64
+                    minimum: 0.0
+                    nullable: true
+                    type: integer
+                type: object
               resources:
                 description: Resource requirements for backup pods
                 nullable: true
@@ -215,6 +366,38 @@ spec:
                     description: Azure Blob Storage configuration
                     nullable: true
                     properties:
+                      accountKeySecret:
+                        description: Storage account key secret
+                        nullable: true
+                        properties:
+                          key:
+                            description: Key within the secret
+                            type: string
+                          name:
+                            description: Secret name
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
+                      clientId:
+                        description: Azure AD client ID
+                        nullable: true
+                        type: string
+                      clientSecretSecret:
+                        description: Service principal client secret
+                        nullable: true
+                        properties:
+                          key:
+                            description: Key within the secret
+                            type: string
+                          name:
+                            description: Secret name
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
                       container:
                         description: Azure blob container name
                         type: string
@@ -232,16 +415,52 @@ spec:
                         - key
                         - name
                         type: object
+                      endpoint:
+                        description: Custom endpoint for sovereign clouds
+                        nullable: true
+                        type: string
                       prefix:
                         description: Key prefix within the container
                         nullable: true
                         type: string
+                      sasTokenSecret:
+                        description: SAS token secret
+                        nullable: true
+                        properties:
+                          key:
+                            description: Key within the secret
+                            type: string
+                          name:
+                            description: Secret name
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
                       storageAccount:
                         description: Azure storage account name
                         type: string
+                      tenantId:
+                        description: Azure AD tenant ID
+                        nullable: true
+                        type: string
+                      useWorkloadIdentity:
+                        description: Enable Azure Workload Identity
+                        nullable: true
+                        type: boolean
                     required:
                     - container
                     - storageAccount
+                    type: object
+                  filesystem:
+                    description: Filesystem storage configuration
+                    nullable: true
+                    properties:
+                      path:
+                        description: Base path for backup data
+                        type: string
+                    required:
+                    - path
                     type: object
                   gcs:
                     description: Google Cloud Storage configuration
@@ -268,6 +487,10 @@ spec:
                         description: Key prefix within the bucket
                         nullable: true
                         type: string
+                      serviceAccountPath:
+                        description: Path to a mounted service account JSON file
+                        nullable: true
+                        type: string
                     required:
                     - bucket
                     type: object
@@ -275,6 +498,24 @@ spec:
                     description: S3-compatible storage configuration
                     nullable: true
                     properties:
+                      accessKeySecret:
+                        description: Secret key containing AWS access key ID
+                        nullable: true
+                        properties:
+                          key:
+                            description: Key within the secret
+                            type: string
+                          name:
+                            description: Secret name
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
+                      allowHttp:
+                        description: Allow insecure HTTP connections
+                        nullable: true
+                        type: boolean
                       bucket:
                         description: S3 bucket name
                         type: string
@@ -308,6 +549,20 @@ spec:
                         description: AWS region
                         nullable: true
                         type: string
+                      secretKeySecret:
+                        description: Secret key containing AWS secret access key
+                        nullable: true
+                        properties:
+                          key:
+                            description: Key within the secret
+                            type: string
+                          name:
+                            description: Secret name
+                            type: string
+                        required:
+                        - key
+                        - name
+                        type: object
                     required:
                     - bucket
                     type: object
@@ -317,6 +572,7 @@ spec:
                     - s3
                     - azure
                     - gcs
+                    - filesystem
                     type: string
                 required:
                 - type
@@ -400,16 +656,16 @@ spec:
                     type: object
                 type: object
               topics:
-                description: Topic selection with include/exclude regex patterns
+                description: Topic selection with include/exclude glob patterns
                 nullable: true
                 properties:
                   exclude:
-                    description: Regex patterns for topics to exclude
+                    description: Glob patterns for topics to exclude
                     items:
                       type: string
                     type: array
                   include:
-                    description: Regex patterns for topics to include
+                    description: Glob patterns for topics to include
                     items:
                       type: string
                     type: array

@@ -106,10 +106,50 @@ spec:
                 required:
                 - name
                 type: object
+              connection:
+                description: Kafka connection tuning for the target cluster
+                nullable: true
+                properties:
+                  connectionsPerBroker:
+                    description: TCP connections to keep per broker
+                    format: uint
+                    minimum: 0.0
+                    nullable: true
+                    type: integer
+                  keepaliveIntervalSecs:
+                    description: Seconds between keepalive probes
+                    format: uint64
+                    minimum: 0.0
+                    nullable: true
+                    type: integer
+                  keepaliveTimeSecs:
+                    description: Seconds before the first keepalive probe
+                    format: uint64
+                    minimum: 0.0
+                    nullable: true
+                    type: integer
+                  tcpKeepalive:
+                    description: Enable TCP keepalive
+                    nullable: true
+                    type: boolean
+                  tcpNodelay:
+                    description: Enable TCP_NODELAY
+                    nullable: true
+                    type: boolean
+                type: object
               consumerGroups:
                 description: Consumer group restore configuration
                 nullable: true
                 properties:
+                  auto:
+                    description: Automatically load the consumer group snapshot from backup storage
+                    nullable: true
+                    type: boolean
+                  groups:
+                    description: Consumer groups to reset
+                    items:
+                      type: string
+                    type: array
                   mapping:
                     description: Consumer group mappings (source → target)
                     items:
@@ -126,21 +166,68 @@ spec:
                       - targetGroup
                       type: object
                     type: array
+                  offsetReport:
+                    description: Output file path for offset mapping report
+                    nullable: true
+                    type: string
                   restore:
                     default: false
                     description: Whether to restore consumer group offsets
                     type: boolean
+                  strategy:
+                    description: 'Offset handling strategy: skip, header-based, timestamp-based, cluster-scan, manual'
+                    nullable: true
+                    type: string
                 type: object
               image:
                 description: 'Container image for the restore job (default: ghcr.io/osodevops/kafka-backup:latest)'
                 nullable: true
                 type: string
+              metrics:
+                description: Metrics configuration for restore job pods
+                nullable: true
+                properties:
+                  bindAddress:
+                    description: Metrics bind address
+                    nullable: true
+                    type: string
+                  enabled:
+                    description: Enable the kafka-backup metrics server
+                    nullable: true
+                    type: boolean
+                  maxPartitionLabels:
+                    description: Maximum topic/partition labels emitted by the core metrics registry
+                    format: uint
+                    minimum: 0.0
+                    nullable: true
+                    type: integer
+                  path:
+                    description: Metrics endpoint path
+                    nullable: true
+                    type: string
+                  port:
+                    description: Metrics HTTP port
+                    format: uint16
+                    minimum: 0.0
+                    nullable: true
+                    type: integer
+                  updateIntervalMs:
+                    description: Metrics recalculation interval in milliseconds
+                    format: uint64
+                    minimum: 0.0
+                    nullable: true
+                    type: integer
+                type: object
               pointInTime:
                 description: Point-in-time recovery settings
                 nullable: true
                 properties:
                   offsetFromEnd:
-                    description: Duration offset from backup end (e.g., "2h", "30m")
+                    description: Duration offset from backup end (not supported by the current kafka-backup core)
+                    nullable: true
+                    type: string
+                  startTimestamp:
+                    description: Start timestamp for the restore window (ISO 8601 with millisecond precision)
                     nullable: true
                     type: string
                   timestamp:
@@ -167,19 +254,119 @@ spec:
                 description: Restore behaviour options
                 nullable: true
                 properties:
+                  checkpointIntervalSecs:
+                    description: Checkpoint interval in seconds
+                    format: uint64
+                    minimum: 0.0
+                    nullable: true
+                    type: integer
+                  checkpointState:
+                    description: Checkpoint state file path
+                    nullable: true
+                    type: string
+                  defaultReplicationFactor:
+                    description: Replication factor for auto-created topics
+                    format: int16
+                    nullable: true
+                    type: integer
+                  dryRun:
+                    description: 'Dry-run mode: validate without writing records'
+                    nullable: true
+                    type: boolean
                   existingTopicPolicy:
-                    description: 'Policy for existing topics: fail, append, or overwrite'
+                    description: 'Policy for existing topics: append or overwrite. fail is accepted for legacy CRs but rejected at runtime.'
                     enum:
                     - fail
                     - append
                     - overwrite
                     nullable: true
                     type: string
+                  includeOriginalOffsetHeader:
+                    description: Include original offsets as headers on restored records
+                    nullable: true
+                    type: boolean
                   parallelism:
                     description: 'Number of concurrent restore threads (default: 4)'
                     format: int32
                     nullable: true
                     type: integer
+                  partitionMapping:
+                    description: Partition mapping entries
+                    items:
+                      description: Mapping for source partition to target partition.
+                      properties:
+                        sourcePartition:
+                          description: Source partition number
+                          format: int32
+                          type: integer
+                        targetPartition:
+                          description: Target partition number
+                          format: int32
+                          type: integer
+                      required:
+                      - sourcePartition
+                      - targetPartition
+                      type: object
+                    type: array
+                  produceAcks:
+                    description: Producer acks setting (-1, 0, or 1)
+                    format: int16
+                    nullable: true
+                    type: integer
+                  produceBatchSize:
+                    description: Produce batch size
+                    format: uint
+                    minimum: 0.0
+                    nullable: true
+                    type: integer
+                  produceTimeoutMs:
+                    description: Broker-side produce timeout in milliseconds
+                    format: int32
+                    nullable: true
+                    type: integer
+                  purgeTopics:
+                    description: Purge target topics before restoring
+                    nullable: true
+                    type: boolean
+                  rateLimitBytesPerSec:
+                    description: Rate limit in bytes per second
+                    format: uint64
+                    minimum: 0.0
+                    nullable: true
+                    type: integer
+                  rateLimitRecordsPerSec:
+                    description: Rate limit in records per second
+                    format: uint64
+                    minimum: 0.0
+                    nullable: true
+                    type: integer
+                  repartitioning:
+                    description: Per-topic repartitioning configuration
+                    items:
+                      description: Per-topic repartitioning configuration keyed by target topic name.
+                      properties:
+                        strategy:
+                          description: 'Partitioning strategy: murmur2 or automatic'
+                          nullable: true
+                          type: string
+                        targetPartitions:
+                          description: Target partition count
+                          format: int32
+                          type: integer
+                        topic:
+                          description: Target topic name
+                          type: string
+                      required:
+                      - targetPartitions
+                      - topic
+                      type: object
+                    type: array
+                  sourcePartitions:
+                    description: Source partitions to restore
+                    items:
+                      format: int32
+                      type: integer
+                    type: array
                   topicCreation:
                     description: 'Topic creation strategy: auto or manual'
                     enum:
