@@ -3,9 +3,9 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use super::common::{
-    AuthenticationSpec, BackupHistoryEntry, Condition, ConsumerGroupSelection, LastBackupInfo,
-    PodTemplateSpec, ResourceRequirementsSpec, SecretKeyRef, StorageSpec, StrimziClusterRef,
-    TopicSelection,
+    AuthenticationSpec, BackupHistoryEntry, Condition, ConsumerGroupSelection, KafkaConnectionSpec,
+    LastBackupInfo, MetricsSpec, OffsetStorageSpec, PodTemplateSpec, ResourceRequirementsSpec,
+    SecretKeyRef, StorageSpec, StrimziClusterRef, TopicSelection,
 };
 
 /// KafkaBackup defines a backup configuration for a Strimzi-managed Kafka cluster.
@@ -34,9 +34,13 @@ pub struct KafkaBackupSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub authentication: Option<AuthenticationSpec>,
 
-    /// Topic selection with include/exclude regex patterns
+    /// Topic selection with include/exclude glob patterns
     #[serde(skip_serializing_if = "Option::is_none")]
     pub topics: Option<TopicSelection>,
+
+    /// Kafka connection tuning for the source cluster
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub connection: Option<KafkaConnectionSpec>,
 
     /// Consumer group selection
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -48,6 +52,14 @@ pub struct KafkaBackupSpec {
     /// Backup options (compression, encryption, parallelism)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub backup: Option<BackupOptionsSpec>,
+
+    /// Metrics configuration for backup job pods
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metrics: Option<MetricsSpec>,
+
+    /// Offset storage configuration for continuous backup progress
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub offset_storage: Option<OffsetStorageSpec>,
 
     /// Cron schedule configuration
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -74,9 +86,13 @@ pub struct KafkaBackupSpec {
 #[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupOptionsSpec {
-    /// Compression algorithm: none, gzip, snappy, lz4, zstd
+    /// Compression algorithm: none, lz4, zstd
     #[serde(skip_serializing_if = "Option::is_none")]
     pub compression: Option<String>,
+
+    /// Compression level (zstd: 1-22)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub compression_level: Option<i32>,
 
     /// Encryption configuration
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -86,9 +102,57 @@ pub struct BackupOptionsSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub segment_size: Option<i64>,
 
+    /// Maximum segment time interval in milliseconds
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub segment_max_interval_ms: Option<u64>,
+
     /// Number of concurrent partition backup threads (default: 4)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub parallelism: Option<i32>,
+
+    /// Starting offset for backups: earliest or latest
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start_offset: Option<String>,
+
+    /// Run continuously instead of one-shot
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub continuous: Option<bool>,
+
+    /// Include internal Kafka topics
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub include_internal_topics: Option<bool>,
+
+    /// Internal topics to include
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub internal_topics: Vec<String>,
+
+    /// Checkpoint interval in seconds
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub checkpoint_interval_secs: Option<u64>,
+
+    /// Remote offset database sync interval in seconds
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sync_interval_secs: Option<u64>,
+
+    /// Include original Kafka offset headers in backup records
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub include_offset_headers: Option<bool>,
+
+    /// Source cluster identifier written to record headers
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub source_cluster_id: Option<String>,
+
+    /// Snapshot current high watermarks and exit when caught up
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stop_at_current_offsets: Option<bool>,
+
+    /// Continuous-mode poll interval in milliseconds
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub poll_interval_ms: Option<u64>,
+
+    /// Snapshot consumer group offsets after each backup cycle
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub consumer_group_snapshot: Option<bool>,
 }
 
 /// Encryption configuration for backups

@@ -16,11 +16,11 @@ spec:
 
   topics:
     include:
-      - "orders.*"
-      - "payments.*"
+      - "orders-*"
+      - "payments-*"
     exclude:
-      - ".*\\.internal"
-      - "__.*"
+      - "*-internal"
+      - "__*"
 
   storage:
     type: s3
@@ -28,14 +28,18 @@ spec:
       bucket: my-kafka-backups
       region: eu-west-1
       prefix: "strimzi/my-kafka-cluster/"
-      credentialsSecret:
+      accessKeySecret:
         name: backup-s3-credentials
-        key: aws-credentials
+        key: access-key-id
+      secretKeySecret:
+        name: backup-s3-credentials
+        key: secret-access-key
 
   backup:
     compression: zstd
     segmentSize: 268435456
     parallelism: 4
+    stopAtCurrentOffsets: true
 
   schedule:
     cron: "0 2 * * *"

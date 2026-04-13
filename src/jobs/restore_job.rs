@@ -39,10 +39,11 @@ pub fn build_restore_job(
     let annotations = build_annotations(restore.spec.template.as_ref());
 
     // Build volumes and mounts — use source backup's storage config for credentials
-    let (volumes, volume_mounts) = build_volumes_and_mounts(
+    let (volumes, volume_mounts, env) = build_volumes_and_mounts(
         config_map_name,
         "restore.yaml",
         &cluster.name,
+        cluster.tls_enabled,
         auth,
         &source_backup.spec.storage,
     );
@@ -57,6 +58,7 @@ pub fn build_restore_job(
             "--config".to_string(),
             "/config/restore.yaml".to_string(),
         ]),
+        env: if env.is_empty() { None } else { Some(env) },
         volume_mounts: Some(volume_mounts),
         resources: restore.spec.resources.as_ref().map(|r| r.to_k8s()),
         ..Default::default()

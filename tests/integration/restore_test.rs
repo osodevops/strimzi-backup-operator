@@ -15,6 +15,7 @@ fn sample_backup() -> KafkaBackup {
         },
         authentication: None,
         topics: None,
+        connection: None,
         consumer_groups: None,
         storage: StorageSpec {
             storage_type: StorageType::S3,
@@ -24,15 +25,21 @@ fn sample_backup() -> KafkaBackup {
                 prefix: Some("strimzi/production-cluster/".to_string()),
                 endpoint: None,
                 force_path_style: None,
+                allow_http: None,
                 credentials_secret: Some(SecretKeyRef {
                     name: "backup-s3-credentials".to_string(),
                     key: "aws-credentials".to_string(),
                 }),
+                access_key_secret: None,
+                secret_key_secret: None,
             }),
             azure: None,
             gcs: None,
+            filesystem: None,
         },
         backup: None,
+        metrics: None,
+        offset_storage: None,
         schedule: None,
         retention: None,
         resources: None,
@@ -56,9 +63,11 @@ fn sample_restore() -> KafkaRestore {
             backup_id: Some("backup-20260213-020000".to_string()),
         },
         point_in_time: Some(PointInTimeSpec {
+            start_timestamp: None,
             timestamp: Some("2026-02-13T01:30:00.000Z".to_string()),
             offset_from_end: None,
         }),
+        connection: None,
         topic_mapping: vec![
             TopicMappingEntry {
                 source_topic: "orders".to_string(),
@@ -71,6 +80,10 @@ fn sample_restore() -> KafkaRestore {
         ],
         consumer_groups: Some(ConsumerGroupRestoreSpec {
             restore: true,
+            auto: None,
+            groups: Vec::new(),
+            strategy: None,
+            offset_report: None,
             mapping: vec![ConsumerGroupMapping {
                 source_group: "order-processor".to_string(),
                 target_group: "order-processor".to_string(),
@@ -78,9 +91,24 @@ fn sample_restore() -> KafkaRestore {
         }),
         restore: Some(RestoreOptionsSpec {
             topic_creation: Some(TopicCreationPolicy::Auto),
-            existing_topic_policy: Some(ExistingTopicPolicy::Fail),
+            existing_topic_policy: Some(ExistingTopicPolicy::Append),
+            dry_run: None,
+            include_original_offset_header: None,
+            source_partitions: Vec::new(),
+            partition_mapping: Vec::new(),
             parallelism: Some(4),
+            rate_limit_records_per_sec: None,
+            rate_limit_bytes_per_sec: None,
+            produce_batch_size: None,
+            produce_acks: None,
+            produce_timeout_ms: None,
+            checkpoint_state: None,
+            checkpoint_interval_secs: None,
+            default_replication_factor: None,
+            repartitioning: Vec::new(),
+            purge_topics: None,
         }),
+        metrics: None,
         resources: None,
         template: None,
         image: None,
@@ -113,7 +141,10 @@ fn test_restore_config_generation() {
 
     assert!(yaml.contains("mode: restore"));
     assert!(yaml.contains("backup_id: backup-20260213-020000"));
-    assert!(yaml.contains("bootstrap_servers: dr-cluster-kafka-bootstrap.kafka.svc:9093"));
+    assert!(yaml.contains("bootstrap_servers:"));
+    assert!(yaml.contains("- dr-cluster-kafka-bootstrap.kafka.svc:9093"));
+    assert!(yaml.contains("security_protocol: SSL"));
+    assert!(yaml.contains("backend: s3"));
     assert!(yaml.contains("orders: orders-restored"));
     assert!(yaml.contains("payments: payments-restored"));
     // PITR timestamp should be converted to epoch ms
@@ -170,6 +201,7 @@ fn test_restore_job_creation() {
 fn test_restore_with_offset_from_end() {
     let mut restore = sample_restore();
     restore.spec.point_in_time = Some(PointInTimeSpec {
+        start_timestamp: None,
         timestamp: None,
         offset_from_end: Some("2h".to_string()),
     });
@@ -177,8 +209,26 @@ fn test_restore_with_offset_from_end() {
     let backup = sample_backup();
     let cluster = sample_cluster();
 
-    let yaml =
-        build_restore_config_yaml(&restore, &backup, &cluster, &None, &ResolvedAuth::None).unwrap();
+    let err = build_restore_config_yaml(&restore, &backup, &cluster, &None, &ResolvedAuth::None)
+        .unwrap_err();
 
-    assert!(yaml.contains("offset_from_end: 2h"));
+    assert!(err
+        .to_string()
+        .contains("pointInTime.offsetFromEnd is not supported"));
+}
+
+#[test]
+fn test_restore_with_unsupported_existing_topic_fail_policy() {
+    let mut restore = sample_restore();
+    restore.spec.restore.as_mut().unwrap().existing_topic_policy = Some(ExistingTopicPolicy::Fail);
+
+    let backup = sample_backup();
+    let cluster = sample_cluster();
+
+    let err = build_restore_config_yaml(&restore, &backup, &cluster, &None, &ResolvedAuth::None)
+        .unwrap_err();
+
+    assert!(err
+        .to_string()
+        .contains("existingTopicPolicy: fail is not supported"));
 }

@@ -17,6 +17,7 @@ fn sample_backup() -> KafkaBackup {
             include: vec!["orders.*".to_string(), "payments.*".to_string()],
             exclude: vec!["__.*".to_string()],
         }),
+        connection: None,
         consumer_groups: None,
         storage: StorageSpec {
             storage_type: StorageType::S3,
@@ -26,20 +27,39 @@ fn sample_backup() -> KafkaBackup {
                 prefix: Some("strimzi/production-cluster/".to_string()),
                 endpoint: None,
                 force_path_style: None,
+                allow_http: None,
                 credentials_secret: Some(SecretKeyRef {
                     name: "backup-s3-credentials".to_string(),
                     key: "aws-credentials".to_string(),
                 }),
+                access_key_secret: None,
+                secret_key_secret: None,
             }),
             azure: None,
             gcs: None,
+            filesystem: None,
         },
         backup: Some(BackupOptionsSpec {
             compression: Some("zstd".to_string()),
+            compression_level: None,
             encryption: None,
             segment_size: Some(268435456),
+            segment_max_interval_ms: None,
             parallelism: Some(4),
+            start_offset: None,
+            continuous: None,
+            include_internal_topics: None,
+            internal_topics: Vec::new(),
+            checkpoint_interval_secs: None,
+            sync_interval_secs: None,
+            include_offset_headers: None,
+            source_cluster_id: None,
+            stop_at_current_offsets: None,
+            poll_interval_ms: None,
+            consumer_group_snapshot: None,
         }),
+        metrics: None,
+        offset_storage: None,
         schedule: Some(ScheduleSpec {
             cron: "0 2 * * *".to_string(),
             timezone: Some("UTC".to_string()),
@@ -79,7 +99,11 @@ fn test_backup_config_generation() {
     let yaml = build_backup_config_yaml(&backup, &cluster, &None, &ResolvedAuth::None).unwrap();
 
     assert!(yaml.contains("mode: backup"));
-    assert!(yaml.contains("bootstrap_servers: production-cluster-kafka-bootstrap.kafka.svc:9093"));
+    assert!(yaml.contains("backup_id: ${BACKUP_ID}"));
+    assert!(yaml.contains("bootstrap_servers:"));
+    assert!(yaml.contains("- production-cluster-kafka-bootstrap.kafka.svc:9093"));
+    assert!(yaml.contains("security_protocol: SSL"));
+    assert!(yaml.contains("backend: s3"));
     assert!(yaml.contains("compression: zstd"));
     assert!(yaml.contains("orders.*"));
     assert!(yaml.contains("payments.*"));
@@ -131,6 +155,12 @@ fn test_backup_job_creation() {
         .as_ref()
         .unwrap()
         .contains(&"/config/backup.yaml".to_string()));
+    assert!(pod_spec.containers[0]
+        .env
+        .as_ref()
+        .unwrap()
+        .iter()
+        .any(|env| env.name == "BACKUP_ID"));
 }
 
 #[test]
@@ -152,8 +182,9 @@ fn test_backup_with_tls_auth() {
     };
 
     let yaml = build_backup_config_yaml(&backup, &cluster, &None, &auth).unwrap();
-    assert!(yaml.contains("type: tls"));
-    assert!(yaml.contains("cert_path: /certs/user/user.crt"));
+    assert!(yaml.contains("security_protocol: SSL"));
+    assert!(yaml.contains("ssl_certificate_location: /certs/user/user.crt"));
+    assert!(yaml.contains("ssl_key_location: /certs/user/user.key"));
 
     let job = build_backup_job(&backup, "test-job", "test-config", &cluster, &auth).unwrap();
 

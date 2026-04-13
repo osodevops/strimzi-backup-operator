@@ -35,7 +35,7 @@ spec:
 
   restore:
     topicCreation: auto
-    existingTopicPolicy: fail
+    existingTopicPolicy: append
     parallelism: 4
 
   resources:
