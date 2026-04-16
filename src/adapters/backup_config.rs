@@ -23,10 +23,23 @@ pub fn build_backup_config_yaml(
         Value::String("backup".to_string()),
     );
 
-    // Backup ID is provided by the job pod via env var so scheduled jobs get unique IDs.
+    // Backup ID: incremental backups require a stable id across runs so the CLI can
+    // merge manifests and resume from the last saved offset (kafka-backup >= v0.13.5).
+    // We infer "incremental" from the same predicate the CLI itself uses —
+    // `offset_storage` is set and `continuous` is not `true`. In all other cases we
+    // keep the env-var form so scheduled jobs get a unique id per run.
+    let backup_id = if is_incremental_one_shot(backup) {
+        backup
+            .metadata
+            .name
+            .clone()
+            .unwrap_or_else(|| "backup".to_string())
+    } else {
+        "${BACKUP_ID}".to_string()
+    };
     config.insert(
         Value::String("backup_id".to_string()),
-        Value::String("${BACKUP_ID}".to_string()),
+        Value::String(backup_id),
     );
 
     // Source (Kafka cluster)
@@ -377,6 +390,24 @@ fn build_offset_storage_options(offset_storage: &crate::crd::common::OffsetStora
     Value::Mapping(config)
 }
 
+/// Whether this backup will behave as an incremental one-shot run.
+///
+/// Mirrors the predicate in kafka-backup's `should_create_offset_store`: the offset
+/// store is used when an `offset_storage` block is configured, or when
+/// `backup.continuous` is `true`. When the former is true but the latter is not,
+/// each run is a one-shot that resumes from the previous run — which requires a
+/// stable `backup_id` across runs so the CLI can merge manifests.
+fn is_incremental_one_shot(backup: &KafkaBackup) -> bool {
+    let offset_storage_set = backup.spec.offset_storage.is_some();
+    let continuous = backup
+        .spec
+        .backup
+        .as_ref()
+        .and_then(|b| b.continuous)
+        .unwrap_or(false);
+    offset_storage_set && !continuous
+}
+
 fn insert_bool(config: &mut serde_yaml::Mapping, key: &str, value: Option<bool>) {
     if let Some(value) = value {
         config.insert(Value::String(key.to_string()), Value::Bool(value));
@@ -469,21 +500,75 @@ mod tests {
         backup
     }
 
-    #[test]
-    fn test_build_backup_config() {
-        let backup = test_backup();
-        let cluster = ResolvedKafkaCluster {
+    fn test_cluster() -> ResolvedKafkaCluster {
+        ResolvedKafkaCluster {
             name: "my-cluster".to_string(),
             namespace: "kafka".to_string(),
             bootstrap_servers: "my-cluster-kafka-bootstrap.kafka.svc:9093".to_string(),
             replicas: 3,
             tls_enabled: true,
             listener_name: "tls".to_string(),
-        };
+        }
+    }
 
-        let yaml = build_backup_config_yaml(&backup, &cluster, &None, &ResolvedAuth::None).unwrap();
+    #[test]
+    fn test_build_backup_config() {
+        let backup = test_backup();
+        let yaml =
+            build_backup_config_yaml(&backup, &test_cluster(), &None, &ResolvedAuth::None).unwrap();
         assert!(yaml.contains("mode: backup"));
         assert!(yaml.contains("bootstrap_servers:"));
         assert!(yaml.contains("orders.*"));
+    }
+
+    #[test]
+    fn test_default_backup_id_uses_env_var() {
+        let backup = test_backup();
+        let yaml =
+            build_backup_config_yaml(&backup, &test_cluster(), &None, &ResolvedAuth::None).unwrap();
+        assert!(yaml.contains("backup_id: ${BACKUP_ID}"));
+    }
+
+    #[test]
+    fn test_incremental_one_shot_uses_stable_backup_id() {
+        let mut backup = test_backup();
+        backup.spec.offset_storage = Some(OffsetStorageSpec {
+            backend: None,
+            db_path: Some("/tmp/offsets.db".to_string()),
+            s3_key: None,
+            sync_interval_secs: Some(30),
+        });
+        // continuous is None (defaults to false) → incremental one-shot
+
+        let yaml =
+            build_backup_config_yaml(&backup, &test_cluster(), &None, &ResolvedAuth::None).unwrap();
+        assert!(yaml.contains("backup_id: test-backup\n"));
+        assert!(!yaml.contains("${BACKUP_ID}"));
+        assert!(yaml.contains("offset_storage:"));
+    }
+
+    #[test]
+    fn test_continuous_mode_keeps_env_var_backup_id() {
+        let mut backup = test_backup();
+        backup.spec.offset_storage = Some(OffsetStorageSpec {
+            backend: None,
+            db_path: Some("/tmp/offsets.db".to_string()),
+            s3_key: None,
+            sync_interval_secs: None,
+        });
+        backup.spec.backup.as_mut().unwrap().continuous = Some(true);
+
+        let yaml =
+            build_backup_config_yaml(&backup, &test_cluster(), &None, &ResolvedAuth::None).unwrap();
+        assert!(yaml.contains("backup_id: ${BACKUP_ID}"));
+    }
+
+    #[test]
+    fn test_offset_storage_absent_keeps_env_var_backup_id() {
+        let backup = test_backup();
+        let yaml =
+            build_backup_config_yaml(&backup, &test_cluster(), &None, &ResolvedAuth::None).unwrap();
+        assert!(yaml.contains("backup_id: ${BACKUP_ID}"));
+        assert!(!yaml.contains("offset_storage:"));
     }
 }
