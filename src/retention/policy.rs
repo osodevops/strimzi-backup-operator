@@ -17,7 +17,7 @@ pub fn evaluate_retention(
 
     // Sort by start_time descending (newest first)
     let mut sorted: Vec<&BackupHistoryEntry> = history.iter().collect();
-    sorted.sort_by(|a, b| b.start_time.cmp(&a.start_time));
+    sorted.sort_by_key(|b| std::cmp::Reverse(b.start_time));
 
     // Apply max_backups limit
     if let Some(max_backups) = retention.max_backups {

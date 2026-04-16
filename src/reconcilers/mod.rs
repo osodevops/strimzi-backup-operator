@@ -8,5 +8,7 @@ pub const FINALIZER: &str = "kafkabackup.com/cleanup";
 pub const TRIGGER_ANNOTATION: &str = "kafkabackup.com/trigger";
 pub const TRIGGER_VALUE_NOW: &str = "now";
 
-/// Default backup image
-pub const DEFAULT_BACKUP_IMAGE: &str = "ghcr.io/osodevops/kafka-backup:latest";
+/// Default backup image. Pinned to a specific version so behaviour is deterministic —
+/// v0.13.5 is the first release that activates incremental one-shot backups from an
+/// `offset_storage` block alone (see kafka-backup PR #92).
+pub const DEFAULT_BACKUP_IMAGE: &str = "ghcr.io/osodevops/kafka-backup:v0.13.5";
