@@ -2,19 +2,19 @@
 apiVersion: monitoring.coreos.com/v1
 kind: ServiceMonitor
 metadata:
-  name: {{ include "kafka-backup-operator.fullname" . }}
+  name: {{ include "strimzi-backup-operator.fullname" . }}
   {{- if .Values.metrics.serviceMonitor.namespace }}
   namespace: {{ .Values.metrics.serviceMonitor.namespace }}
   {{- end }}
   labels:
-    {{- include "kafka-backup-operator.labels" . | nindent 4 }}
+    {{- include "strimzi-backup-operator.labels" . | nindent 4 }}
     {{- with .Values.metrics.serviceMonitor.labels }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
 spec:
   selector:
     matchLabels:
-      {{- include "kafka-backup-operator.selectorLabels" . | nindent 6 }}
+      {{- include "strimzi-backup-operator.selectorLabels" . | nindent 6 }}
   endpoints:
     - port: metrics
       interval: {{ .Values.metrics.serviceMonitor.interval }}

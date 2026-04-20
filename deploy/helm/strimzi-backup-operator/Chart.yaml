@@ -1,5 +1,5 @@
 apiVersion: v2
-name: kafka-backup-operator
+name: strimzi-backup-operator
 description: Kubernetes operator for Kafka backup and restore, integrated with Strimzi
 type: application
 version: 0.1.1

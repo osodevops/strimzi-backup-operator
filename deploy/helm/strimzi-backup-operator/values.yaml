@@ -1,4 +1,4 @@
-# Default values for kafka-backup-operator
+# Default values for strimzi-backup-operator
 
 # Number of replicas
 replicaCount: 1
