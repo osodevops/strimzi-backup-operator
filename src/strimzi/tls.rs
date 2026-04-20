@@ -92,7 +92,10 @@ pub fn extract_secret_string(secret: &Secret, key: &str, secret_name: &str) -> R
 pub fn ca_secret_ref(cluster_name: &str, ca_override: Option<&SecretKeyRef>) -> (String, String) {
     match ca_override {
         Some(r) => (r.name.clone(), r.key.clone()),
-        None => (cluster_ca_secret_name(cluster_name), DEFAULT_CA_KEY.to_string()),
+        None => (
+            cluster_ca_secret_name(cluster_name),
+            DEFAULT_CA_KEY.to_string(),
+        ),
     }
 }
 
