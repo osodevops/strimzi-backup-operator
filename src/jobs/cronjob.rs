@@ -43,6 +43,7 @@ pub fn build_backup_cronjob(
         cluster.tls_enabled,
         auth,
         &backup.spec.storage,
+        backup.spec.strimzi_cluster_ref.ca_secret.as_ref(),
     );
     env.push(job_name_env_var("BACKUP_ID"));
 

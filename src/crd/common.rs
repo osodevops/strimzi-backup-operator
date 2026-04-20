@@ -54,6 +54,12 @@ pub struct StrimziClusterRef {
     /// Namespace of the Kafka CR (defaults to same namespace as this resource)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub namespace: Option<String>,
+    /// Optional override for the cluster CA secret. Defaults to the Strimzi
+    /// convention `{name}-cluster-ca-cert` with key `ca.crt`. Useful when the
+    /// CA is stored in a differently-named secret, or when the key inside the
+    /// secret is not `ca.crt`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ca_secret: Option<SecretKeyRef>,
 }
 
 /// Authentication configuration for connecting to Kafka

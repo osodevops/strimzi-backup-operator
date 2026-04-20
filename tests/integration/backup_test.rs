@@ -11,6 +11,7 @@ fn sample_backup() -> KafkaBackup {
         strimzi_cluster_ref: StrimziClusterRef {
             name: "production-cluster".to_string(),
             namespace: None,
+            ca_secret: None,
         },
         authentication: None,
         topics: Some(TopicSelection {

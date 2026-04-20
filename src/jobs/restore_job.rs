@@ -46,6 +46,7 @@ pub fn build_restore_job(
         cluster.tls_enabled,
         auth,
         &source_backup.spec.storage,
+        restore.spec.strimzi_cluster_ref.ca_secret.as_ref(),
     );
 
     // Build container

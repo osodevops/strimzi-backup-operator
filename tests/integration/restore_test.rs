@@ -12,6 +12,7 @@ fn sample_backup() -> KafkaBackup {
         strimzi_cluster_ref: StrimziClusterRef {
             name: "production-cluster".to_string(),
             namespace: None,
+            ca_secret: None,
         },
         authentication: None,
         topics: None,
@@ -56,6 +57,7 @@ fn sample_restore() -> KafkaRestore {
         strimzi_cluster_ref: StrimziClusterRef {
             name: "dr-cluster".to_string(),
             namespace: None,
+            ca_secret: None,
         },
         authentication: None,
         backup_ref: BackupRef {

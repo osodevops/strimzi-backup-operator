@@ -443,6 +443,7 @@ mod tests {
             strimzi_cluster_ref: StrimziClusterRef {
                 name: "my-cluster".to_string(),
                 namespace: None,
+                ca_secret: None,
             },
             authentication: None,
             topics: Some(TopicSelection {
