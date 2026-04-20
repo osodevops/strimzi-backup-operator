@@ -81,7 +81,7 @@ helm repo add oso-devops https://osodevops.github.io/helm-charts/
 helm repo update
 
 # Install the operator
-helm install kafka-backup-operator oso-devops/kafka-backup-operator \
+helm install strimzi-backup-operator oso-devops/strimzi-backup-operator \
   --namespace kafka \
   --create-namespace
 ```
