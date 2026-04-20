@@ -48,10 +48,10 @@ clean:
 	$(CARGO) clean
 
 helm-template:
-	helm template kafka-backup-operator deploy/helm/kafka-backup-operator
+	helm template strimzi-backup-operator deploy/helm/strimzi-backup-operator
 
 helm-install:
-	helm install kafka-backup-operator deploy/helm/kafka-backup-operator
+	helm install strimzi-backup-operator deploy/helm/strimzi-backup-operator
 
 helm-uninstall:
-	helm uninstall kafka-backup-operator
+	helm uninstall strimzi-backup-operator
