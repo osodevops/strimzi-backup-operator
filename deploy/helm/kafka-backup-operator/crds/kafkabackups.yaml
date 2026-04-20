@@ -580,6 +580,20 @@ spec:
               strimziClusterRef:
                 description: Reference to the Strimzi Kafka cluster CR
                 properties:
+                  caSecret:
+                    description: Optional override for the cluster CA secret. Defaults to the Strimzi convention `{name}-cluster-ca-cert` with key `ca.crt`. Useful when the CA is stored in a differently-named secret, or when the key inside the secret is not `ca.crt`.
+                    nullable: true
+                    properties:
+                      key:
+                        description: Key within the secret
+                        type: string
+                      name:
+                        description: Secret name
+                        type: string
+                    required:
+                    - key
+                    - name
+                    type: object
                   name:
                     description: Name of the Kafka CR
                     type: string

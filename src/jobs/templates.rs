@@ -36,7 +36,12 @@ pub fn build_labels(cr_name: &str, cluster_name: &str, job_type: &str) -> BTreeM
     labels
 }
 
-/// Build the volumes and volume mounts for backup/restore containers
+/// Build the volumes and volume mounts for backup/restore containers.
+///
+/// `ca_override` swaps out the Strimzi-convention cluster CA secret
+/// (`{cluster}-cluster-ca-cert` / `ca.crt`) for a user-provided one. The file
+/// is always mounted at `/certs/cluster-ca/ca.crt` regardless of the source
+/// key, so the config YAML path (`ssl_ca_location`) stays constant.
 pub fn build_volumes_and_mounts(
     config_map_name: &str,
     _config_key: &str,
@@ -44,6 +49,7 @@ pub fn build_volumes_and_mounts(
     tls_enabled: bool,
     auth: &ResolvedAuth,
     storage: &StorageSpec,
+    ca_override: Option<&SecretKeyRef>,
 ) -> (Vec<Volume>, Vec<VolumeMount>, Vec<EnvVar>) {
     let mut volumes = Vec::new();
     let mut mounts = Vec::new();
@@ -67,13 +73,13 @@ pub fn build_volumes_and_mounts(
 
     // Cluster CA certificate volume
     if tls_enabled || matches!(auth, ResolvedAuth::Tls { .. }) {
-        let ca_secret = tls::cluster_ca_secret_name(cluster_name);
+        let (ca_secret, ca_key) = tls::ca_secret_ref(cluster_name, ca_override);
         volumes.push(Volume {
             name: "cluster-ca".to_string(),
             secret: Some(SecretVolumeSource {
                 secret_name: Some(ca_secret),
                 items: Some(vec![KeyToPath {
-                    key: "ca.crt".to_string(),
+                    key: ca_key,
                     path: "ca.crt".to_string(),
                     ..Default::default()
                 }]),
@@ -374,5 +380,80 @@ pub fn merge_template_labels(
                 labels.extend(meta.labels.clone());
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::crd::common::{StorageSpec, StorageType};
+
+    fn empty_storage() -> StorageSpec {
+        StorageSpec {
+            storage_type: StorageType::Filesystem,
+            s3: None,
+            azure: None,
+            gcs: None,
+            filesystem: None,
+        }
+    }
+
+    #[test]
+    fn cluster_ca_volume_uses_override_secret_and_key() {
+        let override_ref = SecretKeyRef {
+            name: "custom-ca".to_string(),
+            key: "tls.crt".to_string(),
+        };
+        let (volumes, mounts, _env) = build_volumes_and_mounts(
+            "cm",
+            "backup.yaml",
+            "my-cluster",
+            true,
+            &ResolvedAuth::None,
+            &empty_storage(),
+            Some(&override_ref),
+        );
+
+        let ca_volume = volumes
+            .iter()
+            .find(|v| v.name == "cluster-ca")
+            .expect("cluster-ca volume should be present");
+        let secret = ca_volume.secret.as_ref().expect("secret volume source");
+        assert_eq!(secret.secret_name.as_deref(), Some("custom-ca"));
+        let items = secret.items.as_ref().expect("secret items");
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].key, "tls.crt");
+        assert_eq!(items[0].path, "ca.crt");
+
+        let ca_mount = mounts
+            .iter()
+            .find(|m| m.name == "cluster-ca")
+            .expect("cluster-ca mount should be present");
+        assert_eq!(ca_mount.mount_path, "/certs/cluster-ca");
+    }
+
+    #[test]
+    fn cluster_ca_volume_defaults_to_strimzi_convention() {
+        let (volumes, _mounts, _env) = build_volumes_and_mounts(
+            "cm",
+            "backup.yaml",
+            "my-cluster",
+            true,
+            &ResolvedAuth::None,
+            &empty_storage(),
+            None,
+        );
+
+        let ca_volume = volumes
+            .iter()
+            .find(|v| v.name == "cluster-ca")
+            .expect("cluster-ca volume should be present");
+        let secret = ca_volume.secret.as_ref().expect("secret volume source");
+        assert_eq!(
+            secret.secret_name.as_deref(),
+            Some("my-cluster-cluster-ca-cert")
+        );
+        let items = secret.items.as_ref().expect("secret items");
+        assert_eq!(items[0].key, "ca.crt");
     }
 }

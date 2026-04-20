@@ -62,7 +62,14 @@ pub async fn reconcile_backup(
         };
 
     // Step 2: Resolve TLS certificates
-    let tls_certs = match resolve_cluster_ca(&client, &kafka_cluster.name, &namespace).await {
+    let tls_certs = match resolve_cluster_ca(
+        &client,
+        &kafka_cluster.name,
+        backup.spec.strimzi_cluster_ref.ca_secret.as_ref(),
+        &namespace,
+    )
+    .await
+    {
         Ok(certs) => Some(certs),
         Err(e) => {
             warn!(%name, error = %e, "Failed to resolve TLS certs (may not be required)");
