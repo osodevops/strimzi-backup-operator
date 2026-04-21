@@ -263,7 +263,7 @@ spec:
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `image.repository` | Operator container image | `ghcr.io/osodevops/kafka-backup-operator` |
+| `image.repository` | Operator container image | `ghcr.io/osodevops/strimzi-backup-operator` |
 | `image.tag` | Image tag | Chart `appVersion` |
 | `image.pullPolicy` | Image pull policy | `Always` |
 | `replicaCount` | Number of operator replicas | `1` |
@@ -350,7 +350,7 @@ cargo clippy --all-features -- -D warnings
 cargo run --release --bin crdgen
 
 # Build Docker image
-docker build -t kafka-backup-operator .
+docker build -t strimzi-backup-operator .
 ```
 
 ### Local Development

@@ -3,9 +3,9 @@
 
 **Project:** strimzi-backup-operator  
 **Author:** OSO DevOps  
-**Version:** 0.1.0  
-**Date:** February 2026  
-**Status:** Draft  
+**Document Version:** 0.2.1  
+**Date:** April 2026  
+**Status:** Implemented — see release notes for the current shipped version  
 **License:** Apache License 2.0 (aligned with Strimzi ecosystem)  
 **Repository:** github.com/osodevops/strimzi-backup-operator  
 **Website:** kafkabackup.com  
