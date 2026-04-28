@@ -1,0 +1,112 @@
+name: Release Gate
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'Dockerfile'
+      - 'deploy/**'
+      - 'CHANGELOG.md'
+      - 'scripts/release-gate.sh'
+      - '.github/workflows/**'
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'Dockerfile'
+      - 'deploy/**'
+      - 'CHANGELOG.md'
+      - 'scripts/release-gate.sh'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+jobs:
+  release-gate:
+    name: Validate Release Candidate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # stable
+        with:
+          toolchain: stable
+          components: clippy, rustfmt
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4.2.0
+        with:
+          version: v3.14.4
+
+      - name: Cache cargo registry
+        uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-release-gate-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-release-gate-
+            ${{ runner.os }}-cargo-
+
+      - name: Validate release metadata
+        run: bash scripts/release-gate.sh
+
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Run tests
+        run: cargo test --all-features
+        env:
+          RUST_LOG: debug
+
+      - name: Generate CRDs
+        run: cargo run --bin crdgen
+
+      - name: Verify CRDs are up to date
+        run: |
+          git diff --exit-code deploy/crds/ deploy/helm/strimzi-backup-operator/crds/
+          cmp deploy/crds/kafkabackups.yaml deploy/helm/strimzi-backup-operator/crds/kafkabackups.yaml
+          cmp deploy/crds/kafkarestores.yaml deploy/helm/strimzi-backup-operator/crds/kafkarestores.yaml
+
+      - name: Lint Helm chart
+        run: helm lint deploy/helm/strimzi-backup-operator
+
+      - name: Render Helm chart with defaults
+        run: |
+          APP_VERSION=$(awk '$1 == "appVersion:" { gsub(/"/, "", $2); print $2; exit }' deploy/helm/strimzi-backup-operator/Chart.yaml)
+          helm template strimzi-backup-operator deploy/helm/strimzi-backup-operator \
+            | tee /tmp/strimzi-backup-operator-default.yaml
+          grep -q 'name: BACKUP_JOB_SERVICE_ACCOUNT' /tmp/strimzi-backup-operator-default.yaml
+          grep -q 'value: "strimzi-backup-operator"' /tmp/strimzi-backup-operator-default.yaml
+          grep -q "image: ghcr.io/osodevops/strimzi-backup-operator:${APP_VERSION}" /tmp/strimzi-backup-operator-default.yaml
+
+      - name: Render Helm chart with backup job service account override
+        run: |
+          helm template strimzi-backup-operator deploy/helm/strimzi-backup-operator \
+            --set backupJobs.serviceAccountName=kafka-backup-operator \
+            | tee /tmp/strimzi-backup-operator-override.yaml
+          grep -q 'value: "kafka-backup-operator"' /tmp/strimzi-backup-operator-override.yaml

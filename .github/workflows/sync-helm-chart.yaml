@@ -4,11 +4,7 @@ permissions:
   contents: read
 
 on:
-  push:
-    branches:
-      - main
-    paths:
-      - 'deploy/helm/strimzi-backup-operator/**'
+  workflow_call:
   workflow_dispatch:
 
 env:

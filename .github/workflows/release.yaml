@@ -2,9 +2,20 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v[0-9]+.[0-9]+.[0-9]+'
-      - 'v[0-9]+.[0-9]+.[0-9]+-*'
+    branches:
+      - main
+    paths:
+      - 'src/**'
+      - 'tests/**'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'Dockerfile'
+      - 'deploy/**'
+      - 'CHANGELOG.md'
+      - 'scripts/release-gate.sh'
+      - '.github/workflows/release.yaml'
+      - '.github/workflows/sync-helm-chart.yaml'
+  workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
@@ -20,28 +31,50 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      docker_tags: ${{ steps.version.outputs.docker_tags }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           persist-credentials: false
+          fetch-depth: 0
+          fetch-tags: true
 
-      - name: Extract version from tag
+      - name: Extract release version
         id: version
         run: |
-          VERSION=${GITHUB_REF#refs/tags/v}
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF#refs/tags/v}"
+          else
+            VERSION=$(awk -F '"' '/^version = / { print $2; exit }' Cargo.toml)
+          fi
+
+          TAG="v${VERSION}"
+          MAJOR="${VERSION%%.*}"
+          REST="${VERSION#*.}"
+          MINOR="${REST%%.*}"
+          MAJOR_MINOR="${MAJOR}.${MINOR}"
+
           echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          {
+            echo "docker_tags<<EOF"
+            echo "${REGISTRY}/${IMAGE_NAME}:${VERSION}"
+            if [[ "$VERSION" != *-* ]]; then
+              echo "${REGISTRY}/${IMAGE_NAME}:${MAJOR_MINOR}"
+              echo "${REGISTRY}/${IMAGE_NAME}:${MAJOR}"
+              echo "${REGISTRY}/${IMAGE_NAME}:latest"
+            fi
+            echo "EOF"
+          } >> $GITHUB_OUTPUT
           echo "Release version: $VERSION"
 
-      - name: Verify Cargo.toml version matches tag
-        run: |
-          CARGO_VERSION=$(grep '^version' Cargo.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
-          TAG_VERSION=${GITHUB_REF#refs/tags/v}
-          if [ "$CARGO_VERSION" != "$TAG_VERSION" ]; then
-            echo "Error: Cargo.toml version ($CARGO_VERSION) does not match tag version ($TAG_VERSION)"
-            exit 1
-          fi
-          echo "Version verified: $CARGO_VERSION"
+      - name: Validate release gate
+        env:
+          EXPECTED_VERSION: ${{ steps.version.outputs.version }}
+          ALLOW_EXISTING_TAG: ${{ startsWith(github.ref, 'refs/tags/') }}
+        run: bash scripts/release-gate.sh
 
   test:
     name: Pre-release Tests
@@ -58,6 +91,11 @@ jobs:
         with:
           toolchain: stable
           components: clippy, rustfmt
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4.2.0
+        with:
+          version: v3.14.4
 
       - name: Cache cargo registry
         uses: actions/cache@668228422ae6a00e4ad889ee87cd7109ec5666a7 # v5
@@ -80,6 +118,31 @@ jobs:
         run: cargo test --all-features
         env:
           RUST_LOG: debug
+
+      - name: Generate CRDs
+        run: cargo run --bin crdgen
+
+      - name: Verify CRDs are up to date
+        run: |
+          git diff --exit-code deploy/crds/ deploy/helm/strimzi-backup-operator/crds/
+          cmp deploy/crds/kafkabackups.yaml deploy/helm/strimzi-backup-operator/crds/kafkabackups.yaml
+          cmp deploy/crds/kafkarestores.yaml deploy/helm/strimzi-backup-operator/crds/kafkarestores.yaml
+
+      - name: Lint Helm chart
+        run: helm lint deploy/helm/strimzi-backup-operator
+
+      - name: Render Helm chart
+        run: |
+          APP_VERSION=$(awk '$1 == "appVersion:" { gsub(/"/, "", $2); print $2; exit }' deploy/helm/strimzi-backup-operator/Chart.yaml)
+          helm template strimzi-backup-operator deploy/helm/strimzi-backup-operator \
+            | tee /tmp/strimzi-backup-operator-default.yaml
+          grep -q 'name: BACKUP_JOB_SERVICE_ACCOUNT' /tmp/strimzi-backup-operator-default.yaml
+          grep -q 'value: "strimzi-backup-operator"' /tmp/strimzi-backup-operator-default.yaml
+          grep -q "image: ghcr.io/osodevops/strimzi-backup-operator:${APP_VERSION}" /tmp/strimzi-backup-operator-default.yaml
+          helm template strimzi-backup-operator deploy/helm/strimzi-backup-operator \
+            --set backupJobs.serviceAccountName=kafka-backup-operator \
+            | tee /tmp/strimzi-backup-operator-override.yaml
+          grep -q 'value: "kafka-backup-operator"' /tmp/strimzi-backup-operator-override.yaml
 
   build-and-push:
     name: Build and Push Docker Image
@@ -104,17 +167,6 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata for Docker
-        id: meta
-        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=raw,value=latest
-
       - name: Build Docker image
         uses: docker/build-push-action@d08e5c354a6adb9ed34480a06d141179aa583294 # v7
         with:
@@ -136,8 +188,7 @@ jobs:
           context: .
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ needs.validate.outputs.docker_tags }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -179,41 +230,41 @@ jobs:
       - name: Generate changelog
         id: changelog
         run: |
-          TAG="${GITHUB_REF#refs/tags/}"
+          TAG="${{ needs.validate.outputs.tag }}"
 
           # Find the previous tag for changelog generation
-          PREV_TAG=$(git tag --sort=-v:refname | grep -A1 "^${TAG}$" | tail -1)
-          if [ "$PREV_TAG" = "$TAG" ] || [ -z "$PREV_TAG" ]; then
+          PREV_TAG=$(git tag --sort=-v:refname | grep -v "^${TAG}$" | head -1)
+          if [ -z "$PREV_TAG" ]; then
             PREV_TAG=$(git rev-list --max-parents=0 HEAD | head -1)
           fi
-          echo "Generating changelog: ${PREV_TAG}..${TAG}"
+          echo "Generating changelog: ${PREV_TAG}..HEAD"
 
           # Generate changelog grouped by conventional commit type
           echo "## What's Changed" > changelog.md
           echo "" >> changelog.md
 
-          FEATURES=$(git log "${PREV_TAG}..${TAG}" --oneline --grep="^feat" --format="* %s" 2>/dev/null | head -20)
+          FEATURES=$(git log "${PREV_TAG}..HEAD" --oneline --grep="^feat" --format="* %s" 2>/dev/null | head -20)
           if [ -n "$FEATURES" ]; then
             echo "### Features" >> changelog.md
             echo "$FEATURES" >> changelog.md
             echo "" >> changelog.md
           fi
 
-          FIXES=$(git log "${PREV_TAG}..${TAG}" --oneline --grep="^fix" --format="* %s" 2>/dev/null | head -20)
+          FIXES=$(git log "${PREV_TAG}..HEAD" --oneline --grep="^fix" --format="* %s" 2>/dev/null | head -20)
           if [ -n "$FIXES" ]; then
             echo "### Fixes" >> changelog.md
             echo "$FIXES" >> changelog.md
             echo "" >> changelog.md
           fi
 
-          DEPS=$(git log "${PREV_TAG}..${TAG}" --oneline --grep="^deps\|^dep\|^chore(deps)\|Bump" --format="* %s" 2>/dev/null | head -20)
+          DEPS=$(git log "${PREV_TAG}..HEAD" --oneline --grep="^deps\|^dep\|^chore(deps)\|Bump" --format="* %s" 2>/dev/null | head -20)
           if [ -n "$DEPS" ]; then
             echo "### Dependencies" >> changelog.md
             echo "$DEPS" >> changelog.md
             echo "" >> changelog.md
           fi
 
-          OTHER=$(git log "${PREV_TAG}..${TAG}" --oneline --grep="^ci\|^chore\|^style\|^refactor" --format="* %s" 2>/dev/null | head -20)
+          OTHER=$(git log "${PREV_TAG}..HEAD" --oneline --grep="^ci\|^chore\|^style\|^refactor" --format="* %s" 2>/dev/null | head -20)
           if [ -n "$OTHER" ]; then
             echo "### Other" >> changelog.md
             echo "$OTHER" >> changelog.md
@@ -226,24 +277,19 @@ jobs:
         uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe # v2
         with:
           name: v${{ needs.validate.outputs.version }}
+          tag_name: ${{ needs.validate.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           body_path: changelog.md
           files: |
             crds.yaml
           draft: false
-          prerelease: ${{ contains(github.ref, '-') }}
+          prerelease: ${{ contains(needs.validate.outputs.version, '-') }}
           generate_release_notes: false
         env:
           GITHUB_TOKEN: ${{ secrets.RELEASE_PAT || secrets.GITHUB_TOKEN }}
 
   sync-helm-chart:
-    name: Trigger Helm Chart Sync
-    runs-on: ubuntu-latest
+    name: Sync Helm Chart
     needs: [create-release]
-    steps:
-      - name: Trigger helm-charts repo workflow
-        uses: peter-evans/repository-dispatch@28959ce8df70de7be546dd1250a005dd32156697 # v4
-        with:
-          token: ${{ secrets.HELM_CHARTS_PAT }}
-          repository: osodevops/helm-charts
-          event-type: update-kafka-backup-operator
-          client-payload: '{"version": "${{ needs.validate.outputs.version }}"}'
+    uses: ./.github/workflows/sync-helm-chart.yaml
+    secrets: inherit
