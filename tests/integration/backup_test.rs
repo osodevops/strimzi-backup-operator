@@ -3,6 +3,7 @@ use kafka_backup_operator::crd::common::*;
 use kafka_backup_operator::crd::kafka_backup::*;
 use kafka_backup_operator::crd::KafkaBackup;
 use kafka_backup_operator::jobs::backup_job::build_backup_job;
+use kafka_backup_operator::jobs::cronjob::build_backup_cronjob;
 use kafka_backup_operator::strimzi::kafka_cr::ResolvedKafkaCluster;
 use kafka_backup_operator::strimzi::kafka_user::ResolvedAuth;
 
@@ -122,6 +123,7 @@ fn test_backup_job_creation() {
         "daily-backup-config",
         &cluster,
         &ResolvedAuth::None,
+        Some("strimzi-backup-operator"),
     )
     .unwrap();
 
@@ -149,6 +151,10 @@ fn test_backup_job_creation() {
 
     let spec = job.spec.as_ref().unwrap();
     let pod_spec = spec.template.spec.as_ref().unwrap();
+    assert_eq!(
+        pod_spec.service_account_name.as_deref(),
+        Some("strimzi-backup-operator")
+    );
     assert_eq!(pod_spec.containers.len(), 1);
     assert_eq!(pod_spec.containers[0].name, "backup");
     assert!(pod_spec.containers[0]
@@ -162,6 +168,38 @@ fn test_backup_job_creation() {
         .unwrap()
         .iter()
         .any(|env| env.name == "BACKUP_ID"));
+}
+
+#[test]
+fn test_backup_cronjob_uses_configured_service_account() {
+    let backup = sample_backup();
+    let cluster = sample_cluster();
+
+    let cronjob = build_backup_cronjob(
+        &backup,
+        "daily-backup-config",
+        &cluster,
+        &ResolvedAuth::None,
+        Some("strimzi-backup-operator"),
+    )
+    .unwrap();
+
+    let pod_spec = cronjob
+        .spec
+        .as_ref()
+        .unwrap()
+        .job_template
+        .spec
+        .as_ref()
+        .unwrap()
+        .template
+        .spec
+        .as_ref()
+        .unwrap();
+    assert_eq!(
+        pod_spec.service_account_name.as_deref(),
+        Some("strimzi-backup-operator")
+    );
 }
 
 #[test]
@@ -187,7 +225,15 @@ fn test_backup_with_tls_auth() {
     assert!(yaml.contains("ssl_certificate_location: /certs/user/user.crt"));
     assert!(yaml.contains("ssl_key_location: /certs/user/user.key"));
 
-    let job = build_backup_job(&backup, "test-job", "test-config", &cluster, &auth).unwrap();
+    let job = build_backup_job(
+        &backup,
+        "test-job",
+        "test-config",
+        &cluster,
+        &auth,
+        Some("strimzi-backup-operator"),
+    )
+    .unwrap();
 
     let volumes = job
         .spec

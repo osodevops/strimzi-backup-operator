@@ -7,6 +7,7 @@ use kube::{
     api::{Api, Patch, PatchParams, PostParams, ResourceExt},
     Client,
 };
+use std::collections::BTreeSet;
 use tracing::{debug, error, info, warn};
 
 use crate::adapters::backup_config::build_backup_config_yaml;
@@ -16,7 +17,11 @@ use crate::error::{Error, Result};
 use crate::jobs::backup_job::build_backup_job;
 use crate::jobs::cronjob::build_backup_cronjob;
 use crate::metrics::prometheus::MetricsState;
-use crate::reconcilers::{FINALIZER, TRIGGER_ANNOTATION, TRIGGER_VALUE_NOW};
+use crate::reconcilers::{
+    job_service_account_name, FINALIZER, TRIGGER_ANNOTATION, TRIGGER_VALUE_NOW,
+};
+use crate::retention::policy::evaluate_retention;
+use crate::retention::storage::{discover_backup_history, prune_backup_ids};
 use crate::status::conditions::*;
 use crate::strimzi::kafka_cr::resolve_kafka_cluster;
 use crate::strimzi::kafka_user::resolve_auth;
@@ -89,11 +94,17 @@ pub async fn reconcile_backup(
         .await?;
 
     // Step 5: Check for scheduled vs one-shot
+    let job_service_account = job_service_account_name();
     if let Some(schedule) = &backup.spec.schedule {
         if !schedule.suspend {
             // Create CronJob
-            let cronjob =
-                build_backup_cronjob(&backup, &config_map_name, &kafka_cluster, &resolved_auth)?;
+            let cronjob = build_backup_cronjob(
+                &backup,
+                &config_map_name,
+                &kafka_cluster,
+                &resolved_auth,
+                job_service_account.as_deref(),
+            )?;
             let cronjob_api: Api<k8s_openapi::api::batch::v1::CronJob> =
                 Api::namespaced(client.clone(), &namespace);
             let cronjob_name = format!("{name}-scheduled");
@@ -125,6 +136,7 @@ pub async fn reconcile_backup(
             &config_map_name,
             &kafka_cluster,
             &resolved_auth,
+            job_service_account.as_deref(),
         )?;
 
         let jobs_api: Api<Job> = Api::namespaced(client.clone(), &namespace);
@@ -150,6 +162,7 @@ pub async fn reconcile_backup(
 
     // Step 8: Check running job status and update
     check_job_completion(&client, &backup_api, &backup, generation).await?;
+    apply_retention_policy(&client, &backup_api, &backup, generation).await?;
 
     Ok(())
 }
@@ -297,6 +310,85 @@ async fn is_job_running(jobs_api: &Api<Job>, backup_name: &str) -> Result<bool> 
     Ok(running)
 }
 
+async fn apply_retention_policy(
+    client: &Client,
+    backup_api: &Api<KafkaBackup>,
+    backup: &KafkaBackup,
+    generation: i64,
+) -> Result<()> {
+    let Some(retention) = &backup.spec.retention else {
+        return Ok(());
+    };
+    if backup.spec.schedule.is_none() || !retention.prune_on_schedule {
+        return Ok(());
+    }
+
+    let name = backup.name_any();
+    let namespace = backup.namespace().unwrap_or_default();
+    let mut history = current_backup_status(backup_api, &name)
+        .await?
+        .backup_history;
+
+    let discovered =
+        discover_backup_history(client, &namespace, &backup.spec.storage, &name).await?;
+    merge_backup_history(&mut history, discovered);
+
+    let active_backup_ids = active_backup_ids(client, &namespace, &name, backup).await?;
+    let mut to_prune = evaluate_retention(&history, retention);
+    to_prune.retain(|id| !active_backup_ids.contains(id));
+
+    if to_prune.is_empty() {
+        patch_backup_history(backup_api, &name, &history).await?;
+        return Ok(());
+    }
+
+    let pruned = prune_backup_ids(client, &namespace, &backup.spec.storage, &to_prune).await?;
+    history.retain(|entry| !pruned.contains(&entry.id));
+    patch_backup_history(backup_api, &name, &history).await?;
+
+    info!(
+        %name,
+        generation,
+        pruned = pruned.len(),
+        "Applied backup retention policy"
+    );
+
+    Ok(())
+}
+
+async fn active_backup_ids(
+    client: &Client,
+    namespace: &str,
+    backup_name: &str,
+    backup: &KafkaBackup,
+) -> Result<BTreeSet<String>> {
+    let jobs_api: Api<Job> = Api::namespaced(client.clone(), namespace);
+    let lp = kube::api::ListParams::default().labels(&format!(
+        "kafkabackup.com/backup={backup_name},kafkabackup.com/type=backup"
+    ));
+    let jobs = jobs_api.list(&lp).await?;
+    let mut active = BTreeSet::new();
+
+    for job in jobs {
+        let is_active = job
+            .status
+            .as_ref()
+            .is_some_and(|status| status.active.unwrap_or(0) > 0);
+        if !is_active {
+            continue;
+        }
+
+        if let Some(job_name) = job.metadata.name {
+            active.insert(job_name);
+        }
+        if backup.spec.offset_storage.is_some() {
+            active.insert(backup_name.to_string());
+        }
+    }
+
+    Ok(active)
+}
+
 async fn check_job_completion(
     client: &Client,
     backup_api: &Api<KafkaBackup>,
@@ -353,11 +445,9 @@ async fn check_job_completion(
 }
 
 async fn update_status_running(api: &Api<KafkaBackup>, name: &str, generation: i64) -> Result<()> {
-    let status = KafkaBackupStatus {
-        conditions: vec![not_ready(REASON_BACKUP_RUNNING, "Backup job is running")],
-        observed_generation: Some(generation),
-        ..Default::default()
-    };
+    let mut status = current_backup_status(api, name).await?;
+    status.conditions = vec![not_ready(REASON_BACKUP_RUNNING, "Backup job is running")];
+    status.observed_generation = Some(generation);
     patch_status(api, name, &status).await
 }
 
@@ -367,15 +457,13 @@ async fn update_status_scheduled(
     generation: i64,
     next_backup: &str,
 ) -> Result<()> {
-    let status = KafkaBackupStatus {
-        conditions: vec![ready(
-            REASON_BACKUP_SCHEDULED,
-            &format!("Next backup scheduled: {next_backup}"),
-        )],
-        observed_generation: Some(generation),
-        next_scheduled_backup: Some(next_backup.to_string()),
-        ..Default::default()
-    };
+    let mut status = current_backup_status(api, name).await?;
+    status.conditions = vec![ready(
+        REASON_BACKUP_SCHEDULED,
+        &format!("Next backup scheduled: {next_backup}"),
+    )];
+    status.observed_generation = Some(generation);
+    status.next_scheduled_backup = Some(next_backup.to_string());
     patch_status(api, name, &status).await
 }
 
@@ -385,6 +473,7 @@ async fn update_status_completed(
     generation: i64,
     entry: &BackupHistoryEntry,
 ) -> Result<()> {
+    let mut status = current_backup_status(api, name).await?;
     let last_backup = LastBackupInfo {
         id: entry.id.clone(),
         start_time: entry.start_time,
@@ -397,15 +486,13 @@ async fn update_status_completed(
         newest_timestamp: None,
     };
 
-    let status = KafkaBackupStatus {
-        conditions: vec![ready(
-            REASON_BACKUP_COMPLETED,
-            "Backup completed successfully",
-        )],
-        last_backup: Some(last_backup),
-        observed_generation: Some(generation),
-        ..Default::default()
-    };
+    status.conditions = vec![ready(
+        REASON_BACKUP_COMPLETED,
+        "Backup completed successfully",
+    )];
+    status.last_backup = Some(last_backup);
+    status.observed_generation = Some(generation);
+    upsert_history_entry(&mut status.backup_history, entry.clone());
     patch_status(api, name, &status).await
 }
 
@@ -415,12 +502,51 @@ async fn update_status_error(
     generation: i64,
     error: &Error,
 ) -> Result<()> {
-    let status = KafkaBackupStatus {
-        conditions: error_conditions(error.reason(), &error.to_string()),
-        observed_generation: Some(generation),
-        ..Default::default()
-    };
+    let mut status = current_backup_status(api, name).await?;
+    status.conditions = error_conditions(error.reason(), &error.to_string());
+    status.observed_generation = Some(generation);
     patch_status(api, name, &status).await
+}
+
+async fn current_backup_status(api: &Api<KafkaBackup>, name: &str) -> Result<KafkaBackupStatus> {
+    Ok(api.get_status(name).await?.status.unwrap_or_default())
+}
+
+fn merge_backup_history(
+    history: &mut Vec<BackupHistoryEntry>,
+    discovered: Vec<BackupHistoryEntry>,
+) {
+    for entry in discovered {
+        upsert_history_entry(history, entry);
+    }
+    history.sort_by_key(|entry| std::cmp::Reverse(entry.start_time));
+}
+
+fn upsert_history_entry(history: &mut Vec<BackupHistoryEntry>, mut entry: BackupHistoryEntry) {
+    if let Some(existing) = history.iter_mut().find(|existing| existing.id == entry.id) {
+        if entry.completion_time.is_none() {
+            entry.completion_time = existing.completion_time;
+        }
+        *existing = entry;
+    } else {
+        history.push(entry);
+    }
+    history.sort_by_key(|entry| std::cmp::Reverse(entry.start_time));
+}
+
+async fn patch_backup_history(
+    api: &Api<KafkaBackup>,
+    name: &str,
+    history: &[BackupHistoryEntry],
+) -> Result<()> {
+    let patch = serde_json::json!({ "status": { "backupHistory": history } });
+    api.patch_status(
+        name,
+        &PatchParams::apply("kafka-backup-operator"),
+        &Patch::Merge(&patch),
+    )
+    .await?;
+    Ok(())
 }
 
 async fn patch_status(

@@ -166,6 +166,7 @@ fn test_restore_job_creation() {
         &cluster,
         &ResolvedAuth::None,
         &backup,
+        Some("strimzi-backup-operator"),
     )
     .unwrap();
 
@@ -191,6 +192,10 @@ fn test_restore_job_creation() {
     assert_eq!(owner_refs[0].name, "pitr-restore");
 
     let pod_spec = job.spec.as_ref().unwrap().template.spec.as_ref().unwrap();
+    assert_eq!(
+        pod_spec.service_account_name.as_deref(),
+        Some("strimzi-backup-operator")
+    );
     assert_eq!(pod_spec.containers[0].name, "restore");
     assert!(pod_spec.containers[0]
         .args

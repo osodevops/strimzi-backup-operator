@@ -24,6 +24,11 @@ serviceAccount:
   # If not set and create is true, a name is generated using the fullname template
   name: ""
 
+backupJobs:
+  # Service account used by backup and restore job pods.
+  # If empty, the chart passes the operator service account name.
+  serviceAccountName: ""
+
 # Azure Workload Identity configuration
 # When enabled, the operator can authenticate to Azure services using federated identity tokens
 # instead of storing credentials in Kubernetes secrets

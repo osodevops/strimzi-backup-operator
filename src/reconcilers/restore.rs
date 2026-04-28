@@ -15,7 +15,7 @@ use crate::crd::{KafkaBackup, KafkaRestore, KafkaRestoreStatus};
 use crate::error::{Error, Result};
 use crate::jobs::restore_job::build_restore_job;
 use crate::metrics::prometheus::MetricsState;
-use crate::reconcilers::FINALIZER;
+use crate::reconcilers::{job_service_account_name, FINALIZER};
 use crate::status::conditions::*;
 use crate::strimzi::kafka_cr::resolve_kafka_cluster;
 use crate::strimzi::kafka_user::resolve_auth;
@@ -118,6 +118,7 @@ pub async fn reconcile_restore(
     let jobs_api: Api<Job> = Api::namespaced(client.clone(), &namespace);
     if !is_job_running(&jobs_api, &name).await? {
         let job_name = format!("{name}-{}", Utc::now().format("%Y%m%d-%H%M%S"));
+        let job_service_account = job_service_account_name();
         let job = build_restore_job(
             &restore,
             &job_name,
@@ -125,6 +126,7 @@ pub async fn reconcile_restore(
             &kafka_cluster,
             &resolved_auth,
             &source_backup,
+            job_service_account.as_deref(),
         )?;
 
         jobs_api

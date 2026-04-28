@@ -20,6 +20,7 @@ pub fn build_backup_cronjob(
     config_map_name: &str,
     cluster: &ResolvedKafkaCluster,
     auth: &ResolvedAuth,
+    service_account_name: Option<&str>,
 ) -> Result<CronJob> {
     let cr_name = backup.name_any();
     let namespace = backup.namespace().unwrap_or_default();
@@ -68,7 +69,7 @@ pub fn build_backup_cronjob(
         containers: vec![container],
         volumes: Some(volumes),
         restart_policy: Some("Never".to_string()),
-        service_account_name: Some("kafka-backup-operator".to_string()),
+        service_account_name: service_account_name.map(str::to_string),
         ..Default::default()
     };
 

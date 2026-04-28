@@ -51,6 +51,8 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
+            - name: BACKUP_JOB_SERVICE_ACCOUNT
+              value: {{ default (include "strimzi-backup-operator.serviceAccountName" .) .Values.backupJobs.serviceAccountName | quote }}
             {{- if .Values.watchNamespaces }}
             - name: STRIMZI_BACKUP_NAMESPACE
               value: {{ join "," .Values.watchNamespaces | quote }}
