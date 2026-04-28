@@ -247,7 +247,7 @@ spec:
                     type: array
                 type: object
               image:
-                description: 'Container image for the backup job (default: ghcr.io/osodevops/kafka-backup:latest)'
+                description: 'Container image for the backup job (default: osodevops/kafka-backup:v0.15.3)'
                 nullable: true
                 type: string
               metrics:

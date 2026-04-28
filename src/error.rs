@@ -24,6 +24,9 @@ pub enum Error {
     #[error("Invalid configuration: {0}")]
     InvalidConfig(String),
 
+    #[error("Storage error: {0}")]
+    Storage(String),
+
     #[error("Backup '{name}' not found")]
     BackupNotFound { name: String },
 
@@ -53,6 +56,7 @@ impl Error {
             Error::SecretKeyMissing { .. } => "SecretKeyMissing",
             Error::KafkaUserNotFound { .. } => "KafkaUserNotFound",
             Error::InvalidConfig(_) => "InvalidConfiguration",
+            Error::Storage(_) => "StorageError",
             Error::BackupNotFound { .. } => "BackupNotFound",
             Error::JobCreationFailed(_) => "JobCreationFailed",
             Error::Finalizer(_) => "FinalizerError",

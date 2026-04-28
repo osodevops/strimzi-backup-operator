@@ -271,6 +271,7 @@ spec:
 | `logging.level` | Rust log filter | `info,kafka_backup_operator=debug` |
 | `logging.format` | Log output format | `json` |
 | `serviceAccount.create` | Create a service account | `true` |
+| `backupJobs.serviceAccountName` | Service account used by backup/restore job pods (empty = operator service account) | `""` |
 | `azureWorkloadIdentity.enabled` | Enable Azure Workload Identity | `false` |
 | `azureWorkloadIdentity.clientId` | Azure Managed Identity client ID | `""` |
 | `metrics.enabled` | Enable Prometheus metrics | `true` |

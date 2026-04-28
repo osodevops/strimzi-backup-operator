@@ -180,7 +180,7 @@ spec:
                     type: string
                 type: object
               image:
-                description: 'Container image for the restore job (default: ghcr.io/osodevops/kafka-backup:latest)'
+                description: 'Container image for the restore job (default: osodevops/kafka-backup:v0.15.3)'
                 nullable: true
                 type: string
               metrics:

@@ -22,6 +22,7 @@ pub fn build_restore_job(
     cluster: &ResolvedKafkaCluster,
     auth: &ResolvedAuth,
     source_backup: &KafkaBackup,
+    service_account_name: Option<&str>,
 ) -> Result<Job> {
     let cr_name = restore.name_any();
     let namespace = restore.namespace().unwrap_or_default();
@@ -70,7 +71,7 @@ pub fn build_restore_job(
         containers: vec![container],
         volumes: Some(volumes),
         restart_policy: Some("Never".to_string()),
-        service_account_name: Some("kafka-backup-operator".to_string()),
+        service_account_name: service_account_name.map(str::to_string),
         ..Default::default()
     };
 
