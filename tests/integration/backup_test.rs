@@ -21,6 +21,8 @@ fn sample_backup() -> KafkaBackup {
         }),
         connection: None,
         consumer_groups: None,
+        logging: None,
+        env: Vec::new(),
         storage: StorageSpec {
             storage_type: StorageType::S3,
             s3: Some(S3StorageSpec {
@@ -113,8 +115,32 @@ fn test_backup_config_generation() {
 }
 
 #[test]
+fn test_backup_logging_config_generation() {
+    let mut backup = sample_backup();
+    backup.spec.logging = Some(LoggingSpec {
+        level: Some("warn".to_string()),
+        format: Some("json".to_string()),
+        output: None,
+        modules: std::collections::BTreeMap::from([("rdkafka".to_string(), "info".to_string())]),
+        rotation: None,
+    });
+    let cluster = sample_cluster();
+
+    let yaml = build_backup_config_yaml(&backup, &cluster, &None, &ResolvedAuth::None).unwrap();
+
+    assert!(yaml.contains("logging:"));
+    assert!(yaml.contains("level: warn"));
+    assert!(yaml.contains("format: json"));
+    assert!(yaml.contains("rdkafka: info"));
+}
+
+#[test]
 fn test_backup_job_creation() {
-    let backup = sample_backup();
+    let mut backup = sample_backup();
+    backup.spec.env.push(serde_json::json!({
+        "name": "RUST_LOG",
+        "value": "kafka_backup=warn"
+    }));
     let cluster = sample_cluster();
 
     let job = build_backup_job(
@@ -168,11 +194,21 @@ fn test_backup_job_creation() {
         .unwrap()
         .iter()
         .any(|env| env.name == "BACKUP_ID"));
+    assert!(pod_spec.containers[0]
+        .env
+        .as_ref()
+        .unwrap()
+        .iter()
+        .any(|env| env.name == "RUST_LOG" && env.value.as_deref() == Some("kafka_backup=warn")));
 }
 
 #[test]
 fn test_backup_cronjob_uses_configured_service_account() {
-    let backup = sample_backup();
+    let mut backup = sample_backup();
+    backup.spec.env.push(serde_json::json!({
+        "name": "RUST_LOG",
+        "value": "kafka_backup=debug,rdkafka=info"
+    }));
     let cluster = sample_cluster();
 
     let cronjob = build_backup_cronjob(
@@ -200,6 +236,13 @@ fn test_backup_cronjob_uses_configured_service_account() {
         pod_spec.service_account_name.as_deref(),
         Some("strimzi-backup-operator")
     );
+    assert!(pod_spec.containers[0]
+        .env
+        .as_ref()
+        .unwrap()
+        .iter()
+        .any(|env| env.name == "RUST_LOG"
+            && env.value.as_deref() == Some("kafka_backup=debug,rdkafka=info")));
 }
 
 #[test]

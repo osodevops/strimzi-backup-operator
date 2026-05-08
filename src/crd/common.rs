@@ -166,6 +166,39 @@ pub struct KafkaConnectionSpec {
     pub connections_per_broker: Option<usize>,
 }
 
+/// Logging configuration passed through to kafka-backup job config.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct LoggingSpec {
+    /// Default log level: error, warn, info, debug, or trace
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub level: Option<String>,
+    /// Log format: text or json
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub format: Option<String>,
+    /// Log output: stderr, stdout, or a file path supported by kafka-backup
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub output: Option<String>,
+    /// Module-specific log levels
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub modules: BTreeMap<String, String>,
+    /// File log rotation settings
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub rotation: Option<LoggingRotationSpec>,
+}
+
+/// File log rotation settings for kafka-backup logging.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct LoggingRotationSpec {
+    /// Maximum size of a log file before rotation, in MiB
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_size_mb: Option<u64>,
+    /// Maximum number of rotated log files to keep
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_files: Option<u32>,
+}
+
 /// Metrics HTTP server configuration for kafka-backup job pods.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
@@ -397,7 +430,7 @@ pub struct ContainerOverrides {
 }
 
 /// Schema helper: a nullable free-form object (type: object with no properties)
-fn free_form_object(_: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+pub(crate) fn free_form_object(_: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
     schemars::schema::Schema::Object(schemars::schema::SchemaObject {
         instance_type: Some(schemars::schema::InstanceType::Object.into()),
         extensions: {
@@ -413,7 +446,9 @@ fn free_form_object(_: &mut schemars::gen::SchemaGenerator) -> schemars::schema:
 }
 
 /// Schema helper: an array of free-form objects
-fn free_form_object_array(_: &mut schemars::gen::SchemaGenerator) -> schemars::schema::Schema {
+pub(crate) fn free_form_object_array(
+    _: &mut schemars::gen::SchemaGenerator,
+) -> schemars::schema::Schema {
     schemars::schema::Schema::Object(schemars::schema::SchemaObject {
         instance_type: Some(schemars::schema::InstanceType::Array.into()),
         array: Some(Box::new(schemars::schema::ArrayValidation {

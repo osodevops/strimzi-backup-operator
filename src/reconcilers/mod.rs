@@ -11,7 +11,7 @@ pub const TRIGGER_VALUE_NOW: &str = "now";
 /// Default backup image. Pinned to a public, current kafka-backup release so
 /// backup/restore job behavior is deterministic and the image is anonymously
 /// pullable by Kubernetes.
-pub const DEFAULT_BACKUP_IMAGE: &str = "osodevops/kafka-backup:v0.15.3";
+pub const DEFAULT_BACKUP_IMAGE: &str = "osodevops/kafka-backup:v0.15.5";
 
 /// Environment variable used by the Helm chart to pass the service account that
 /// backup/restore job pods should run as.

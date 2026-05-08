@@ -1,8 +1,8 @@
 use std::collections::BTreeMap;
 
 use k8s_openapi::api::core::v1::{
-    ConfigMapVolumeSource, EnvVar, EnvVarSource, KeyToPath, ObjectFieldSelector, PodSpec,
-    SecretKeySelector, SecretVolumeSource, Volume, VolumeMount,
+    ConfigMapVolumeSource, Container, EnvVar, EnvVarSource, KeyToPath, ObjectFieldSelector,
+    PodSpec, SecretKeySelector, SecretVolumeSource, Volume, VolumeMount,
 };
 
 use crate::crd::common::{
@@ -165,6 +165,24 @@ pub fn job_name_env_var(name: &str) -> EnvVar {
         }),
         ..Default::default()
     }
+}
+
+/// Append pass-through Kubernetes EnvVar objects to a container.
+pub fn append_env_overrides(container: &mut Container, env_values: &[serde_json::Value]) {
+    if env_values.is_empty() {
+        return;
+    }
+
+    let env_vars: Vec<EnvVar> = env_values
+        .iter()
+        .filter_map(|env| serde_json::from_value(env.clone()).ok())
+        .collect();
+    if env_vars.is_empty() {
+        return;
+    }
+
+    let existing_env = container.env.get_or_insert_with(Vec::new);
+    existing_env.extend(env_vars);
 }
 
 fn add_storage_credentials(
@@ -335,15 +353,7 @@ pub fn apply_pod_template(pod_spec: &mut PodSpec, template: Option<&CrdPodTempla
 
     if let Some(container_overrides) = &tmpl.container {
         if let Some(container) = pod_spec.containers.first_mut() {
-            if !container_overrides.env.is_empty() {
-                let env_vars: Vec<k8s_openapi::api::core::v1::EnvVar> = container_overrides
-                    .env
-                    .iter()
-                    .filter_map(|e| serde_json::from_value(e.clone()).ok())
-                    .collect();
-                let existing_env = container.env.get_or_insert_with(Vec::new);
-                existing_env.extend(env_vars);
-            }
+            append_env_overrides(container, &container_overrides.env);
 
             if let Some(sc) = &container_overrides.security_context {
                 if let Ok(s) = serde_json::from_value(sc.clone()) {

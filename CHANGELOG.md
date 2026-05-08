@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.4 - 2026-05-08
+
+### Added
+
+- Add first-class `spec.logging` and `spec.env` support for `KafkaBackup` and `KafkaRestore` job pods. Fixes [#18](https://github.com/osodevops/strimzi-backup-operator/issues/18).
+
+### Changed
+
+- Update the default `kafka-backup` job image to `osodevops/kafka-backup:v0.15.5`.
+
 ## 0.2.2 - 2026-04-28
 
 ### Fixed

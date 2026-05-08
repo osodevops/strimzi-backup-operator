@@ -172,6 +172,19 @@ spec:
     segmentSize: 268435456      # 256MB — max segment file size before rotation
     parallelism: 4              # Number of concurrent partition backup threads
 
+  # Logging for the backup job
+  logging:
+    level: warn                 # error | warn | info | debug | trace
+    format: json                # json | text
+    modules:
+      kafka_backup: warn
+      rdkafka: info
+
+  # Additional backup job environment variables
+  env:
+    - name: RUST_LOG
+      value: "kafka_backup=warn,rdkafka=info"
+
   # Schedule (cron format, optional — if omitted, runs once)
   schedule:
     cron: "0 2 * * *"           # Daily at 2:00 AM
@@ -296,6 +309,16 @@ spec:
     topicCreation: auto          # auto | manual — auto creates topics if missing
     existingTopicPolicy: fail    # fail | append | overwrite
     parallelism: 4
+
+  # Logging for the restore job
+  logging:
+    level: info
+    format: json
+
+  # Additional restore job environment variables
+  env:
+    - name: RUST_LOG
+      value: "kafka_backup=info,rdkafka=warn"
 
   # Resource requirements for the restore pod
   resources:

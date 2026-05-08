@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 
 use super::common::{
     AuthenticationSpec, BackupHistoryEntry, Condition, ConsumerGroupSelection, KafkaConnectionSpec,
-    LastBackupInfo, MetricsSpec, OffsetStorageSpec, PodTemplateSpec, ResourceRequirementsSpec,
-    SecretKeyRef, StorageSpec, StrimziClusterRef, TopicSelection,
+    LastBackupInfo, LoggingSpec, MetricsSpec, OffsetStorageSpec, PodTemplateSpec,
+    ResourceRequirementsSpec, SecretKeyRef, StorageSpec, StrimziClusterRef, TopicSelection,
 };
 
 /// KafkaBackup defines a backup configuration for a Strimzi-managed Kafka cluster.
@@ -46,6 +46,15 @@ pub struct KafkaBackupSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub consumer_groups: Option<ConsumerGroupSelection>,
 
+    /// Logging configuration for backup job pods
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub logging: Option<LoggingSpec>,
+
+    /// Additional environment variables for backup job pods
+    #[schemars(schema_with = "super::common::free_form_object_array")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub env: Vec<serde_json::Value>,
+
     /// Storage destination configuration
     pub storage: StorageSpec,
 
@@ -77,7 +86,7 @@ pub struct KafkaBackupSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub template: Option<PodTemplateSpec>,
 
-    /// Container image for the backup job (default: osodevops/kafka-backup:v0.15.3)
+    /// Container image for the backup job (default: osodevops/kafka-backup:v0.15.5)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub image: Option<String>,
 }
