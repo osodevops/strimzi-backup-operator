@@ -18,6 +18,8 @@ fn sample_backup() -> KafkaBackup {
         topics: None,
         connection: None,
         consumer_groups: None,
+        logging: None,
+        env: Vec::new(),
         storage: StorageSpec {
             storage_type: StorageType::S3,
             s3: Some(S3StorageSpec {
@@ -70,6 +72,8 @@ fn sample_restore() -> KafkaRestore {
             offset_from_end: None,
         }),
         connection: None,
+        logging: None,
+        env: Vec::new(),
         topic_mapping: vec![
             TopicMappingEntry {
                 source_topic: "orders".to_string(),
@@ -154,8 +158,37 @@ fn test_restore_config_generation() {
 }
 
 #[test]
+fn test_restore_logging_config_generation() {
+    let mut restore = sample_restore();
+    restore.spec.logging = Some(LoggingSpec {
+        level: Some("debug".to_string()),
+        format: Some("text".to_string()),
+        output: None,
+        modules: std::collections::BTreeMap::from([(
+            "kafka_backup".to_string(),
+            "debug".to_string(),
+        )]),
+        rotation: None,
+    });
+    let backup = sample_backup();
+    let cluster = sample_cluster();
+
+    let yaml =
+        build_restore_config_yaml(&restore, &backup, &cluster, &None, &ResolvedAuth::None).unwrap();
+
+    assert!(yaml.contains("logging:"));
+    assert!(yaml.contains("level: debug"));
+    assert!(yaml.contains("format: text"));
+    assert!(yaml.contains("kafka_backup: debug"));
+}
+
+#[test]
 fn test_restore_job_creation() {
-    let restore = sample_restore();
+    let mut restore = sample_restore();
+    restore.spec.env.push(serde_json::json!({
+        "name": "RUST_LOG",
+        "value": "kafka_backup=debug"
+    }));
     let backup = sample_backup();
     let cluster = sample_cluster();
 
@@ -202,6 +235,12 @@ fn test_restore_job_creation() {
         .as_ref()
         .unwrap()
         .contains(&"/config/restore.yaml".to_string()));
+    assert!(pod_spec.containers[0]
+        .env
+        .as_ref()
+        .unwrap()
+        .iter()
+        .any(|env| env.name == "RUST_LOG" && env.value.as_deref() == Some("kafka_backup=debug")));
 }
 
 #[test]

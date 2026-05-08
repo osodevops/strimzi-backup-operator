@@ -6,6 +6,7 @@ use crate::strimzi::kafka_cr::ResolvedKafkaCluster;
 use crate::strimzi::kafka_user::ResolvedAuth;
 use crate::strimzi::tls::ResolvedTlsCerts;
 
+use super::logging_config::build_logging_config;
 use super::storage_config::build_storage_config;
 
 /// Build the complete kafka-backup config YAML from a KafkaBackup CR and resolved resources
@@ -55,6 +56,16 @@ pub fn build_backup_config_yaml(
     // Storage
     let storage = build_storage_config(&backup.spec.storage)?;
     config.insert(Value::String("storage".to_string()), storage);
+
+    // Logging options
+    if let Some(logging) = &backup.spec.logging {
+        let logging = build_logging_config(logging);
+        if let Value::Mapping(ref m) = logging {
+            if !m.is_empty() {
+                config.insert(Value::String("logging".to_string()), logging);
+            }
+        }
+    }
 
     // Backup options
     if let Some(backup_opts) = &backup.spec.backup {
@@ -451,6 +462,8 @@ mod tests {
                 exclude: vec!["__.*".to_string()],
             }),
             connection: None,
+            logging: None,
+            env: Vec::new(),
             storage: StorageSpec {
                 storage_type: StorageType::S3,
                 s3: Some(S3StorageSpec {
@@ -520,6 +533,30 @@ mod tests {
         assert!(yaml.contains("mode: backup"));
         assert!(yaml.contains("bootstrap_servers:"));
         assert!(yaml.contains("orders.*"));
+    }
+
+    #[test]
+    fn test_build_backup_config_includes_logging() {
+        let mut backup = test_backup();
+        backup.spec.logging = Some(LoggingSpec {
+            level: Some("warn".to_string()),
+            format: Some("json".to_string()),
+            output: Some("stderr".to_string()),
+            modules: std::collections::BTreeMap::from([
+                ("kafka_backup".to_string(), "debug".to_string()),
+                ("rdkafka".to_string(), "info".to_string()),
+            ]),
+            rotation: None,
+        });
+
+        let yaml =
+            build_backup_config_yaml(&backup, &test_cluster(), &None, &ResolvedAuth::None).unwrap();
+        assert!(yaml.contains("logging:"));
+        assert!(yaml.contains("level: warn"));
+        assert!(yaml.contains("format: json"));
+        assert!(yaml.contains("output: stderr"));
+        assert!(yaml.contains("kafka_backup: debug"));
+        assert!(yaml.contains("rdkafka: info"));
     }
 
     #[test]

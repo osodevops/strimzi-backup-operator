@@ -117,6 +117,15 @@ spec:
   backup:
     compression: zstd
     parallelism: 4
+  logging:
+    level: warn
+    format: json
+    modules:
+      kafka_backup: warn
+      rdkafka: info
+  env:
+    - name: RUST_LOG
+      value: "kafka_backup=warn,rdkafka=info"
   schedule:
     cron: "0 2 * * *"    # Daily at 2 AM
     timezone: "Europe/London"
@@ -141,6 +150,9 @@ spec:
     name: my-cluster-backup
   pointInTime:
     timestamp: "2026-02-12T14:30:00.000Z"
+  logging:
+    level: info
+    format: json
   topicMapping:
     - sourceTopic: orders
       targetTopic: orders-restored
@@ -281,6 +293,53 @@ spec:
 | `resources.requests.memory` | Memory request | `128Mi` |
 | `resources.limits.cpu` | CPU limit | `500m` |
 | `resources.limits.memory` | Memory limit | `512Mi` |
+
+## Logging
+
+The operator deployment and the backup/restore job pods are configured separately.
+
+Configure the operator deployment log level with Helm:
+
+```yaml
+logging:
+  level: "info,kafka_backup_operator=debug"
+  format: json
+```
+
+Configure `kafka-backup` job logging on each `KafkaBackup` or `KafkaRestore`:
+
+```yaml
+apiVersion: kafkabackup.com/v1alpha1
+kind: KafkaBackup
+metadata:
+  name: debug-backup
+  namespace: kafka
+spec:
+  strimziClusterRef:
+    name: my-kafka-cluster
+  storage:
+    type: s3
+    s3:
+      bucket: my-kafka-backups
+      region: eu-west-1
+  logging:
+    level: warn
+    format: json
+    output: stderr
+    modules:
+      kafka_backup: warn
+      rdkafka: info
+```
+
+For environment-based logging, use top-level `spec.env`; these entries are added
+to backup and restore job containers:
+
+```yaml
+spec:
+  env:
+    - name: RUST_LOG
+      value: "kafka_backup=warn,rdkafka=info"
+```
 
 ## Monitoring
 

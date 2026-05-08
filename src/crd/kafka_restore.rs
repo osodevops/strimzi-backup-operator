@@ -3,7 +3,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use super::common::{
-    AuthenticationSpec, Condition, KafkaConnectionSpec, MetricsSpec, PodTemplateSpec,
+    AuthenticationSpec, Condition, KafkaConnectionSpec, LoggingSpec, MetricsSpec, PodTemplateSpec,
     ResourceRequirementsSpec, RestoreInfo, StrimziClusterRef,
 };
 
@@ -43,6 +43,15 @@ pub struct KafkaRestoreSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub connection: Option<KafkaConnectionSpec>,
 
+    /// Logging configuration for restore job pods
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub logging: Option<LoggingSpec>,
+
+    /// Additional environment variables for restore job pods
+    #[schemars(schema_with = "super::common::free_form_object_array")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub env: Vec<serde_json::Value>,
+
     /// Topic mapping for renaming topics during restore
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub topic_mapping: Vec<TopicMappingEntry>,
@@ -67,7 +76,7 @@ pub struct KafkaRestoreSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub template: Option<PodTemplateSpec>,
 
-    /// Container image for the restore job (default: osodevops/kafka-backup:v0.15.3)
+    /// Container image for the restore job (default: osodevops/kafka-backup:v0.15.5)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub image: Option<String>,
 }

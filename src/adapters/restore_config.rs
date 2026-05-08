@@ -6,6 +6,7 @@ use crate::strimzi::kafka_cr::ResolvedKafkaCluster;
 use crate::strimzi::kafka_user::ResolvedAuth;
 use crate::strimzi::tls::ResolvedTlsCerts;
 
+use super::logging_config::build_logging_config;
 use super::storage_config::build_storage_config;
 
 /// Build the complete kafka-backup config YAML for a restore operation
@@ -37,6 +38,16 @@ pub fn build_restore_config_yaml(
     // Storage (from source backup CR)
     let storage = build_storage_config(&source_backup.spec.storage)?;
     config.insert(Value::String("storage".to_string()), storage);
+
+    // Logging options
+    if let Some(logging) = &restore.spec.logging {
+        let logging = build_logging_config(logging);
+        if let Value::Mapping(ref m) = logging {
+            if !m.is_empty() {
+                config.insert(Value::String("logging".to_string()), logging);
+            }
+        }
+    }
 
     // Restore options
     let restore_opts = build_restore_options(restore)?;

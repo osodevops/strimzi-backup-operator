@@ -41,6 +41,17 @@ spec:
     parallelism: 4
     stopAtCurrentOffsets: true
 
+  logging:
+    level: warn
+    format: json
+    modules:
+      kafka_backup: warn
+      rdkafka: info
+
+  env:
+    - name: RUST_LOG
+      value: "kafka_backup=warn,rdkafka=info"
+
   schedule:
     cron: "0 2 * * *"
     timezone: "UTC"

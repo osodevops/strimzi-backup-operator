@@ -179,10 +179,55 @@ spec:
                     nullable: true
                     type: string
                 type: object
+              env:
+                description: Additional environment variables for restore job pods
+                items:
+                  type: object
+                  x-kubernetes-preserve-unknown-fields: true
+                type: array
               image:
-                description: 'Container image for the restore job (default: osodevops/kafka-backup:v0.15.3)'
+                description: 'Container image for the restore job (default: osodevops/kafka-backup:v0.15.5)'
                 nullable: true
                 type: string
+              logging:
+                description: Logging configuration for restore job pods
+                nullable: true
+                properties:
+                  format:
+                    description: 'Log format: text or json'
+                    nullable: true
+                    type: string
+                  level:
+                    description: 'Default log level: error, warn, info, debug, or trace'
+                    nullable: true
+                    type: string
+                  modules:
+                    additionalProperties:
+                      type: string
+                    description: Module-specific log levels
+                    type: object
+                  output:
+                    description: 'Log output: stderr, stdout, or a file path supported by kafka-backup'
+                    nullable: true
+                    type: string
+                  rotation:
+                    description: File log rotation settings
+                    nullable: true
+                    properties:
+                      maxFiles:
+                        description: Maximum number of rotated log files to keep
+                        format: uint32
+                        minimum: 0.0
+                        nullable: true
+                        type: integer
+                      maxSizeMb:
+                        description: Maximum size of a log file before rotation, in MiB
+                        format: uint64
+                        minimum: 0.0
+                        nullable: true
+                        type: integer
+                    type: object
+                type: object
               metrics:
                 description: Metrics configuration for restore job pods
                 nullable: true

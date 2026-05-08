@@ -16,6 +16,7 @@ Thumbs.db
 # Environment
 .env
 .env.local
+AGENTS.md
 
 # Build artifacts
 *.o

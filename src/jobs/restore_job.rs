@@ -10,8 +10,8 @@ use crate::strimzi::kafka_cr::ResolvedKafkaCluster;
 use crate::strimzi::kafka_user::ResolvedAuth;
 
 use super::templates::{
-    apply_pod_template, build_annotations, build_labels, build_volumes_and_mounts,
-    merge_template_labels,
+    append_env_overrides, apply_pod_template, build_annotations, build_labels,
+    build_volumes_and_mounts, merge_template_labels,
 };
 
 /// Build a Kubernetes Job spec for a restore operation
@@ -51,7 +51,7 @@ pub fn build_restore_job(
     );
 
     // Build container
-    let container = Container {
+    let mut container = Container {
         name: "restore".to_string(),
         image: Some(image.to_string()),
         command: Some(vec!["kafka-backup".to_string()]),
@@ -65,6 +65,7 @@ pub fn build_restore_job(
         resources: restore.spec.resources.as_ref().map(|r| r.to_k8s()),
         ..Default::default()
     };
+    append_env_overrides(&mut container, &restore.spec.env);
 
     // Build pod spec
     let mut pod_spec = PodSpec {

@@ -21,6 +21,14 @@ spec:
   pointInTime:
     timestamp: "2026-02-13T01:30:00.000Z"
 
+  logging:
+    level: info
+    format: json
+
+  env:
+    - name: RUST_LOG
+      value: "kafka_backup=info,rdkafka=warn"
+
   topicMapping:
     - sourceTopic: "orders"
       targetTopic: "orders-restored"
