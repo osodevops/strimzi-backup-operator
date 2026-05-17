@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.5 - 2026-05-17
+
+### Changed
+
+- Update the default `kafka-backup` job image to `osodevops/kafka-backup:v0.15.6`.
+
 ## 0.2.4 - 2026-05-08
 
 ### Added
