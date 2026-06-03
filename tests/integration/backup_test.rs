@@ -1,3 +1,4 @@
+use k8s_openapi::api::core::v1::HostAlias;
 use kafka_backup_operator::adapters::backup_config::build_backup_config_yaml;
 use kafka_backup_operator::crd::common::*;
 use kafka_backup_operator::crd::kafka_backup::*;
@@ -92,6 +93,22 @@ fn sample_cluster() -> ResolvedKafkaCluster {
         replicas: 3,
         tls_enabled: true,
         listener_name: "tls".to_string(),
+    }
+}
+
+fn host_alias_template() -> PodTemplateSpec {
+    PodTemplateSpec {
+        pod: Some(PodOverrides {
+            host_aliases: vec![HostAlias {
+                ip: "10.10.0.5".to_string(),
+                hostnames: Some(vec![
+                    "s3.internal".to_string(),
+                    "minio.internal".to_string(),
+                ]),
+            }],
+            ..Default::default()
+        }),
+        container: None,
     }
 }
 
@@ -243,6 +260,61 @@ fn test_backup_cronjob_uses_configured_service_account() {
         .iter()
         .any(|env| env.name == "RUST_LOG"
             && env.value.as_deref() == Some("kafka_backup=debug,rdkafka=info")));
+}
+
+#[test]
+fn test_backup_jobs_apply_template_host_aliases() {
+    let mut backup = sample_backup();
+    backup.spec.template = Some(host_alias_template());
+    let cluster = sample_cluster();
+
+    let job = build_backup_job(
+        &backup,
+        "daily-backup-20260213-020000",
+        "daily-backup-config",
+        &cluster,
+        &ResolvedAuth::None,
+        Some("strimzi-backup-operator"),
+    )
+    .unwrap();
+
+    let pod_spec = job.spec.as_ref().unwrap().template.spec.as_ref().unwrap();
+    let host_aliases = pod_spec.host_aliases.as_ref().unwrap();
+    assert_eq!(host_aliases.len(), 1);
+    assert_eq!(host_aliases[0].ip, "10.10.0.5");
+    assert_eq!(
+        host_aliases[0].hostnames.as_ref().unwrap(),
+        &vec!["s3.internal".to_string(), "minio.internal".to_string()]
+    );
+
+    let cronjob = build_backup_cronjob(
+        &backup,
+        "daily-backup-config",
+        &cluster,
+        &ResolvedAuth::None,
+        Some("strimzi-backup-operator"),
+    )
+    .unwrap();
+
+    let cron_pod_spec = cronjob
+        .spec
+        .as_ref()
+        .unwrap()
+        .job_template
+        .spec
+        .as_ref()
+        .unwrap()
+        .template
+        .spec
+        .as_ref()
+        .unwrap();
+    let cron_host_aliases = cron_pod_spec.host_aliases.as_ref().unwrap();
+    assert_eq!(cron_host_aliases.len(), 1);
+    assert_eq!(cron_host_aliases[0].ip, "10.10.0.5");
+    assert_eq!(
+        cron_host_aliases[0].hostnames.as_ref().unwrap(),
+        &vec!["s3.internal".to_string(), "minio.internal".to_string()]
+    );
 }
 
 #[test]

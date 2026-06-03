@@ -349,6 +349,10 @@ pub fn apply_pod_template(pod_spec: &mut PodSpec, template: Option<&CrdPodTempla
                 pod_spec.image_pull_secrets = Some(secrets);
             }
         }
+
+        if !pod_overrides.host_aliases.is_empty() {
+            pod_spec.host_aliases = Some(pod_overrides.host_aliases.clone());
+        }
     }
 
     if let Some(container_overrides) = &tmpl.container {

@@ -1,4 +1,5 @@
 use chrono::{DateTime, Utc};
+use k8s_openapi::api::core::v1::HostAlias;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -389,7 +390,7 @@ pub struct PodOverrides {
     pub metadata: Option<PodMetadata>,
     /// Pod affinity rules (pass-through to k8s Affinity)
     #[schemars(schema_with = "free_form_object")]
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub affinity: Option<serde_json::Value>,
     /// Pod tolerations (pass-through to k8s Tolerations)
     #[schemars(schema_with = "free_form_object_array")]
@@ -397,12 +398,15 @@ pub struct PodOverrides {
     pub tolerations: Vec<serde_json::Value>,
     /// Pod security context (pass-through to k8s PodSecurityContext)
     #[schemars(schema_with = "free_form_object")]
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub security_context: Option<serde_json::Value>,
     /// Image pull secrets
     #[schemars(schema_with = "free_form_object_array")]
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub image_pull_secrets: Vec<serde_json::Value>,
+    /// Pod host aliases (pass-through to k8s HostAlias)
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub host_aliases: Vec<HostAlias>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
@@ -425,7 +429,7 @@ pub struct ContainerOverrides {
     pub env: Vec<serde_json::Value>,
     /// Container security context (pass-through to k8s SecurityContext)
     #[schemars(schema_with = "free_form_object")]
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub security_context: Option<serde_json::Value>,
 }
 
