@@ -32,7 +32,7 @@ The **Kafka Backup Operator** solves these problems with a purpose-built Kuberne
 - **Retention policies** — automatic pruning of old backups by count or age
 - **Compression** — gzip, snappy, lz4, or zstd compression for storage efficiency
 - **Prometheus metrics** — built-in observability with backup/restore counters, duration histograms, and storage gauges
-- **Pod template customisation** — full control over backup/restore Job pods (affinity, tolerations, security context, environment variables)
+- **Pod template customisation** — full control over backup/restore Job pods (affinity, tolerations, host aliases, security context, environment variables)
 - **Azure Workload Identity** — native support for passwordless Azure authentication
 
 ## Architecture

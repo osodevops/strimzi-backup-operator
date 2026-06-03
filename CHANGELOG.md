@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.6 - 2026-06-03
+
+### Added
+
+- Add `spec.template.pod.hostAliases` support for `KafkaBackup` and `KafkaRestore` job pods. Fixes [#22](https://github.com/osodevops/strimzi-backup-operator/issues/22).
+
 ## 0.2.5 - 2026-05-17
 
 ### Changed

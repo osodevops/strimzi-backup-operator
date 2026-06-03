@@ -53,3 +53,10 @@ spec:
     limits:
       cpu: "4"
       memory: "8Gi"
+
+  template:
+    pod:
+      hostAliases:
+        - ip: "10.10.0.5"
+          hostnames:
+            - "s3.internal"

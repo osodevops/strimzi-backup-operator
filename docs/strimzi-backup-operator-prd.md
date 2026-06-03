@@ -217,6 +217,10 @@ spec:
           prometheus.io/port: "9090"
       affinity: {}
       tolerations: []
+      hostAliases:
+        - ip: "10.10.0.5"
+          hostnames:
+            - "s3.internal"
       securityContext:
         runAsNonRoot: true
         runAsUser: 1001
@@ -335,6 +339,10 @@ spec:
       metadata:
         labels:
           custom-label: restore-pod
+      hostAliases:
+        - ip: "10.10.0.5"
+          hostnames:
+            - "s3.internal"
 
 status:
   conditions:

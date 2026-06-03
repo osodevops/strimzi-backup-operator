@@ -1,3 +1,4 @@
+use k8s_openapi::api::core::v1::HostAlias;
 use kafka_backup_operator::adapters::restore_config::build_restore_config_yaml;
 use kafka_backup_operator::crd::common::*;
 use kafka_backup_operator::crd::kafka_backup::*;
@@ -136,6 +137,22 @@ fn sample_cluster() -> ResolvedKafkaCluster {
     }
 }
 
+fn host_alias_template() -> PodTemplateSpec {
+    PodTemplateSpec {
+        pod: Some(PodOverrides {
+            host_aliases: vec![HostAlias {
+                ip: "10.10.0.6".to_string(),
+                hostnames: Some(vec![
+                    "s3.internal".to_string(),
+                    "backup-storage.internal".to_string(),
+                ]),
+            }],
+            ..Default::default()
+        }),
+        container: None,
+    }
+}
+
 #[test]
 fn test_restore_config_generation() {
     let restore = sample_restore();
@@ -241,6 +258,37 @@ fn test_restore_job_creation() {
         .unwrap()
         .iter()
         .any(|env| env.name == "RUST_LOG" && env.value.as_deref() == Some("kafka_backup=debug")));
+}
+
+#[test]
+fn test_restore_job_applies_template_host_aliases() {
+    let mut restore = sample_restore();
+    restore.spec.template = Some(host_alias_template());
+    let backup = sample_backup();
+    let cluster = sample_cluster();
+
+    let job = build_restore_job(
+        &restore,
+        "pitr-restore-20260213-093000",
+        "pitr-restore-config",
+        &cluster,
+        &ResolvedAuth::None,
+        &backup,
+        Some("strimzi-backup-operator"),
+    )
+    .unwrap();
+
+    let pod_spec = job.spec.as_ref().unwrap().template.spec.as_ref().unwrap();
+    let host_aliases = pod_spec.host_aliases.as_ref().unwrap();
+    assert_eq!(host_aliases.len(), 1);
+    assert_eq!(host_aliases[0].ip, "10.10.0.6");
+    assert_eq!(
+        host_aliases[0].hostnames.as_ref().unwrap(),
+        &vec![
+            "s3.internal".to_string(),
+            "backup-storage.internal".to_string()
+        ]
+    );
 }
 
 #[test]

@@ -667,8 +667,6 @@ spec:
                         description: Container security context (pass-through to k8s SecurityContext)
                         type: object
                         x-kubernetes-preserve-unknown-fields: true
-                    required:
-                    - securityContext
                     type: object
                   pod:
                     description: Pod-level overrides
@@ -678,6 +676,23 @@ spec:
                         description: Pod affinity rules (pass-through to k8s Affinity)
                         type: object
                         x-kubernetes-preserve-unknown-fields: true
+                      hostAliases:
+                        description: Pod host aliases (pass-through to k8s HostAlias)
+                        items:
+                          description: HostAlias holds the mapping between IP and hostnames that will be injected as an entry in the pod's hosts file.
+                          properties:
+                            hostnames:
+                              description: Hostnames for the above IP address.
+                              items:
+                                type: string
+                              type: array
+                            ip:
+                              description: IP address of the host file entry.
+                              type: string
+                          required:
+                          - ip
+                          type: object
+                        type: array
                       imagePullSecrets:
                         description: Image pull secrets
                         items:
@@ -709,9 +724,6 @@ spec:
                           type: object
                           x-kubernetes-preserve-unknown-fields: true
                         type: array
-                    required:
-                    - affinity
-                    - securityContext
                     type: object
                 type: object
               topics:
