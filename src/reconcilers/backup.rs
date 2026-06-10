@@ -96,25 +96,29 @@ pub async fn reconcile_backup(
     // Step 5: Check for scheduled vs one-shot
     let job_service_account = job_service_account_name();
     if let Some(schedule) = &backup.spec.schedule {
-        if !schedule.suspend {
-            // Create CronJob
-            let cronjob = build_backup_cronjob(
-                &backup,
-                &config_map_name,
-                &kafka_cluster,
-                &resolved_auth,
-                job_service_account.as_deref(),
-            )?;
-            let cronjob_api: Api<k8s_openapi::api::batch::v1::CronJob> =
-                Api::namespaced(client.clone(), &namespace);
-            let cronjob_name = format!("{name}-scheduled");
+        // Apply the CronJob even when suspended so the suspend flag reaches
+        // the live resource; skipping here would leave an existing CronJob
+        // running on its old schedule.
+        let cronjob = build_backup_cronjob(
+            &backup,
+            &config_map_name,
+            &kafka_cluster,
+            &resolved_auth,
+            job_service_account.as_deref(),
+        )?;
+        let cronjob_api: Api<k8s_openapi::api::batch::v1::CronJob> =
+            Api::namespaced(client.clone(), &namespace);
+        let cronjob_name = format!("{name}-scheduled");
 
-            apply_resource(&cronjob_api, &cronjob_name, &cronjob).await?;
+        apply_resource(&cronjob_api, &cronjob_name, &cronjob).await?;
 
-            // Update status
+        // Update status
+        if schedule.suspend {
+            update_status_suspended(&backup_api, &name, generation).await?;
+            info!(%name, "CronJob suspended for scheduled backup");
+        } else {
             let next_backup = schedule.cron.clone();
             update_status_scheduled(&backup_api, &name, generation, &next_backup).await?;
-
             info!(%name, cron = %schedule.cron, "CronJob created/updated for scheduled backup");
         }
     }
@@ -465,6 +469,30 @@ async fn update_status_scheduled(
     status.observed_generation = Some(generation);
     status.next_scheduled_backup = Some(next_backup.to_string());
     patch_status(api, name, &status).await
+}
+
+async fn update_status_suspended(
+    api: &Api<KafkaBackup>,
+    name: &str,
+    generation: i64,
+) -> Result<()> {
+    // Manual merge patch: `nextScheduledBackup` must be an explicit null to be
+    // cleared, but `KafkaBackupStatus` skips `None` fields when serializing.
+    let condition = ready(REASON_BACKUP_SUSPENDED, "Backup schedule is suspended");
+    let patch = serde_json::json!({
+        "status": {
+            "conditions": [condition],
+            "observedGeneration": generation,
+            "nextScheduledBackup": null
+        }
+    });
+    api.patch_status(
+        name,
+        &PatchParams::apply("kafka-backup-operator"),
+        &Patch::Merge(&patch),
+    )
+    .await?;
+    Ok(())
 }
 
 async fn update_status_completed(

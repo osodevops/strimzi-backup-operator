@@ -263,6 +263,33 @@ fn test_backup_cronjob_uses_configured_service_account() {
 }
 
 #[test]
+fn test_backup_cronjob_propagates_suspend() {
+    let mut backup = sample_backup();
+    let cluster = sample_cluster();
+
+    let cronjob = build_backup_cronjob(
+        &backup,
+        "daily-backup-config",
+        &cluster,
+        &ResolvedAuth::None,
+        None,
+    )
+    .unwrap();
+    assert_eq!(cronjob.spec.as_ref().unwrap().suspend, Some(false));
+
+    backup.spec.schedule.as_mut().unwrap().suspend = true;
+    let cronjob = build_backup_cronjob(
+        &backup,
+        "daily-backup-config",
+        &cluster,
+        &ResolvedAuth::None,
+        None,
+    )
+    .unwrap();
+    assert_eq!(cronjob.spec.as_ref().unwrap().suspend, Some(true));
+}
+
+#[test]
 fn test_backup_jobs_apply_template_host_aliases() {
     let mut backup = sample_backup();
     backup.spec.template = Some(host_alias_template());

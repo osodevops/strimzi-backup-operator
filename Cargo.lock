@@ -1099,13 +1099,15 @@ dependencies = [
 
 [[package]]
 name = "kafka-backup-operator"
-version = "0.2.6"
+version = "0.2.7"
 dependencies = [
  "anyhow",
  "assert-json-diff",
  "axum",
  "chrono",
  "futures",
+ "http",
+ "http-body-util",
  "k8s-openapi",
  "kube",
  "kube-runtime",
@@ -1120,6 +1122,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-test",
+ "tower-test",
  "tracing",
  "tracing-subscriber",
 ]
@@ -2515,6 +2518,20 @@ name = "tower-service"
 version = "0.3.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8df9b6e13f2d32c91b9bd719c00d1958837bc7dec474d94952798cc8e69eeec3"
+
+[[package]]
+name = "tower-test"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4546773ffeab9e4ea02b8872faa49bb616a80a7da66afc2f32688943f97efa7"
+dependencies = [
+ "futures-util",
+ "pin-project",
+ "tokio",
+ "tokio-test",
+ "tower-layer",
+ "tower-service",
+]
 
 [[package]]
 name = "tracing"
