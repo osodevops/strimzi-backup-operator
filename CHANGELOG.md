@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.7 - 2026-06-10
+
+### Fixed
+
+- Propagate `spec.schedule.suspend` to the scheduled backup CronJob so suspending a `KafkaBackup` stops scheduled runs, and report a `BackupSuspended` condition while suspended. Fixes [#24](https://github.com/osodevops/strimzi-backup-operator/issues/24).
+
 ## 0.2.6 - 2026-06-03
 
 ### Added

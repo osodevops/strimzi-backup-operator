@@ -20,6 +20,7 @@ pub const REASON_BACKUP_RUNNING: &str = "BackupRunning";
 pub const REASON_BACKUP_COMPLETED: &str = "BackupCompleted";
 pub const REASON_BACKUP_FAILED: &str = "BackupFailed";
 pub const REASON_BACKUP_SCHEDULED: &str = "BackupScheduled";
+pub const REASON_BACKUP_SUSPENDED: &str = "BackupSuspended";
 pub const REASON_RESTORE_RUNNING: &str = "RestoreRunning";
 pub const REASON_RESTORE_COMPLETED: &str = "RestoreCompleted";
 pub const REASON_RESTORE_FAILED: &str = "RestoreFailed";
