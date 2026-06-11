@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.8 - 2026-06-11
+
+### Added
+
+- Add `spec.topics` with include/exclude glob (or `~`-prefixed regex) patterns to `KafkaRestore`, allowing specific topics to be restored from a backup. Fixes [#26](https://github.com/osodevops/strimzi-backup-operator/issues/26).
+- Add `spec.template.pod.serviceAccountName` to `KafkaBackup` and `KafkaRestore` so job pods in namespaces other than the operator's can run with a service account that exists there. Fixes [#27](https://github.com/osodevops/strimzi-backup-operator/issues/27).
+
 ## 0.2.7 - 2026-06-10
 
 ### Fixed

@@ -286,7 +286,7 @@ fn build_backup_options(opts: &crate::crd::kafka_backup::BackupOptionsSpec) -> R
     Ok(Value::Mapping(config))
 }
 
-fn build_topic_selection(topics: &crate::crd::common::TopicSelection) -> Value {
+pub(crate) fn build_topic_selection(topics: &crate::crd::common::TopicSelection) -> Value {
     let mut topic_config = serde_yaml::Mapping::new();
     if !topics.include.is_empty() {
         topic_config.insert(

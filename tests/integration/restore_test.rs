@@ -63,6 +63,7 @@ fn sample_restore() -> KafkaRestore {
             ca_secret: None,
         },
         authentication: None,
+        topics: None,
         backup_ref: BackupRef {
             name: "daily-backup".to_string(),
             backup_id: Some("backup-20260213-020000".to_string()),
@@ -325,4 +326,69 @@ fn test_restore_with_unsupported_existing_topic_fail_policy() {
     assert!(err
         .to_string()
         .contains("existingTopicPolicy: fail is not supported"));
+}
+
+#[test]
+fn test_restore_config_topic_selection() {
+    let mut restore = sample_restore();
+    restore.spec.topics = Some(TopicSelection {
+        include: vec!["orders-*".to_string(), "~payments-\\d+".to_string()],
+        exclude: vec!["*-internal".to_string()],
+    });
+
+    let backup = sample_backup();
+    let cluster = sample_cluster();
+
+    let yaml =
+        build_restore_config_yaml(&restore, &backup, &cluster, &None, &ResolvedAuth::None).unwrap();
+
+    let config: serde_yaml::Value = serde_yaml::from_str(&yaml).unwrap();
+    let topics = &config["target"]["topics"];
+    assert_eq!(topics["include"][0].as_str(), Some("orders-*"));
+    assert_eq!(topics["include"][1].as_str(), Some("~payments-\\d+"));
+    assert_eq!(topics["exclude"][0].as_str(), Some("*-internal"));
+}
+
+#[test]
+fn test_restore_config_omits_topic_selection_by_default() {
+    let restore = sample_restore();
+    let backup = sample_backup();
+    let cluster = sample_cluster();
+
+    let yaml =
+        build_restore_config_yaml(&restore, &backup, &cluster, &None, &ResolvedAuth::None).unwrap();
+
+    let config: serde_yaml::Value = serde_yaml::from_str(&yaml).unwrap();
+    assert!(config["target"].get("topics").is_none());
+}
+
+#[test]
+fn test_restore_job_applies_template_service_account() {
+    let mut restore = sample_restore();
+    restore.spec.template = Some(PodTemplateSpec {
+        pod: Some(PodOverrides {
+            service_account_name: Some("restore-jobs".to_string()),
+            ..Default::default()
+        }),
+        container: None,
+    });
+    let backup = sample_backup();
+    let cluster = sample_cluster();
+
+    let job = build_restore_job(
+        &restore,
+        "pitr-restore-20260213-093000",
+        "pitr-restore-config",
+        &cluster,
+        &ResolvedAuth::None,
+        &backup,
+        Some("strimzi-backup-operator"),
+    )
+    .unwrap();
+
+    let pod_spec = job.spec.as_ref().unwrap().template.spec.as_ref().unwrap();
+    assert_eq!(
+        pod_spec.service_account_name.as_deref(),
+        Some("restore-jobs")
+    );
 }

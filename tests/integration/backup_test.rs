@@ -390,3 +390,77 @@ fn test_backup_with_tls_auth() {
         .unwrap();
     assert!(volumes.iter().any(|v| v.name == "user-certs"));
 }
+
+#[test]
+fn test_backup_jobs_apply_template_service_account() {
+    let mut backup = sample_backup();
+    backup.spec.template = Some(PodTemplateSpec {
+        pod: Some(PodOverrides {
+            service_account_name: Some("backup-jobs".to_string()),
+            ..Default::default()
+        }),
+        container: None,
+    });
+    let cluster = sample_cluster();
+
+    let job = build_backup_job(
+        &backup,
+        "daily-backup-20260213-020000",
+        "daily-backup-config",
+        &cluster,
+        &ResolvedAuth::None,
+        Some("strimzi-backup-operator"),
+    )
+    .unwrap();
+    let pod_spec = job.spec.as_ref().unwrap().template.spec.as_ref().unwrap();
+    assert_eq!(
+        pod_spec.service_account_name.as_deref(),
+        Some("backup-jobs")
+    );
+
+    let cronjob = build_backup_cronjob(
+        &backup,
+        "daily-backup-config",
+        &cluster,
+        &ResolvedAuth::None,
+        Some("strimzi-backup-operator"),
+    )
+    .unwrap();
+    let cron_pod_spec = cronjob
+        .spec
+        .as_ref()
+        .unwrap()
+        .job_template
+        .spec
+        .as_ref()
+        .unwrap()
+        .template
+        .spec
+        .as_ref()
+        .unwrap();
+    assert_eq!(
+        cron_pod_spec.service_account_name.as_deref(),
+        Some("backup-jobs")
+    );
+}
+
+#[test]
+fn test_backup_job_falls_back_to_operator_service_account() {
+    let backup = sample_backup();
+    let cluster = sample_cluster();
+
+    let job = build_backup_job(
+        &backup,
+        "daily-backup-20260213-020000",
+        "daily-backup-config",
+        &cluster,
+        &ResolvedAuth::None,
+        Some("strimzi-backup-operator"),
+    )
+    .unwrap();
+    let pod_spec = job.spec.as_ref().unwrap().template.spec.as_ref().unwrap();
+    assert_eq!(
+        pod_spec.service_account_name.as_deref(),
+        Some("strimzi-backup-operator")
+    );
+}

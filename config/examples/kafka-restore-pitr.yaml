@@ -18,6 +18,14 @@ spec:
     name: daily-backup
     backupId: "backup-20260213-020000"
 
+  # Restore only selected topics from the backup. Glob patterns by default;
+  # prefix with ~ for regex. Matched against source topic names, before
+  # topicMapping renames. Omit to restore every topic in the backup.
+  topics:
+    include:
+      - "orders"
+      - "payments"
+
   pointInTime:
     timestamp: "2026-02-13T01:30:00.000Z"
 
@@ -56,6 +64,9 @@ spec:
 
   template:
     pod:
+      # Service account for the restore job pod; must exist in this namespace.
+      # Defaults to the operator-wide backupJobs.serviceAccountName.
+      serviceAccountName: kafka-backup-jobs
       hostAliases:
         - ip: "10.10.0.5"
           hostnames:

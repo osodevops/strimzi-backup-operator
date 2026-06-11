@@ -26,13 +26,13 @@ The **Kafka Backup Operator** solves these problems with a purpose-built Kuberne
 - **Scheduled backups** — cron-based scheduling with timezone support via Kubernetes CronJobs
 - **Point-in-time recovery (PITR)** — restore your Kafka cluster to any millisecond-precision timestamp
 - **Multi-cloud storage** — back up to Amazon S3, Azure Blob Storage, Google Cloud Storage, or any S3-compatible store (MinIO, Ceph RGW)
-- **Topic filtering** — include/exclude topics using regex patterns
+- **Topic filtering** — include/exclude topics using glob or regex patterns, for both backup and restore
 - **Topic mapping** — rename topics during restore for migration or testing scenarios
 - **Consumer group offset restore** — restore consumer group offsets with optional group remapping
 - **Retention policies** — automatic pruning of old backups by count or age
 - **Compression** — gzip, snappy, lz4, or zstd compression for storage efficiency
 - **Prometheus metrics** — built-in observability with backup/restore counters, duration histograms, and storage gauges
-- **Pod template customisation** — full control over backup/restore Job pods (affinity, tolerations, host aliases, security context, environment variables)
+- **Pod template customisation** — full control over backup/restore Job pods (affinity, tolerations, host aliases, service account, security context, environment variables)
 - **Azure Workload Identity** — native support for passwordless Azure authentication
 
 ## Architecture
@@ -148,6 +148,11 @@ spec:
     name: my-cluster
   backupRef:
     name: my-cluster-backup
+  topics:
+    include:
+      - "orders-*"          # glob, or "~orders-\d+" for regex
+    exclude:
+      - "*-internal"
   pointInTime:
     timestamp: "2026-02-12T14:30:00.000Z"
   logging:
@@ -293,6 +298,26 @@ spec:
 | `resources.requests.memory` | Memory request | `128Mi` |
 | `resources.limits.cpu` | CPU limit | `500m` |
 | `resources.limits.memory` | Memory limit | `512Mi` |
+
+### Job service accounts across namespaces
+
+Backup and restore Jobs run in the namespace of the `KafkaBackup`/`KafkaRestore`
+resource, and by default reference the service account named by
+`backupJobs.serviceAccountName` (falling back to the operator's own service
+account). Service accounts are namespace-scoped, so for resources created
+outside the operator's namespace, set `spec.template.pod.serviceAccountName`
+to a service account that exists in that namespace:
+
+```yaml
+spec:
+  template:
+    pod:
+      serviceAccountName: kafka-backup-jobs
+```
+
+The service account only needs to exist (job pods don't call the Kubernetes
+API), but it should carry any workload-identity annotations (IRSA, Azure
+Workload Identity) your storage backend requires.
 
 ## Logging
 
