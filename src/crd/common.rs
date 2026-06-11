@@ -407,6 +407,10 @@ pub struct PodOverrides {
     /// Pod host aliases (pass-through to k8s HostAlias)
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub host_aliases: Vec<HostAlias>,
+    /// Service account for job pods. Must exist in the namespace of this resource.
+    /// Overrides the operator-wide default (BACKUP_JOB_SERVICE_ACCOUNT).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub service_account_name: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]

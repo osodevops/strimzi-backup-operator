@@ -516,6 +516,10 @@ spec:
                         description: Pod security context (pass-through to k8s PodSecurityContext)
                         type: object
                         x-kubernetes-preserve-unknown-fields: true
+                      serviceAccountName:
+                        description: Service account for job pods. Must exist in the namespace of this resource. Overrides the operator-wide default (BACKUP_JOB_SERVICE_ACCOUNT).
+                        nullable: true
+                        type: string
                       tolerations:
                         description: Pod tolerations (pass-through to k8s Tolerations)
                         items:
@@ -540,6 +544,21 @@ spec:
                   - targetTopic
                   type: object
                 type: array
+              topics:
+                description: Topics to restore, selected by include/exclude glob (or `~`-prefixed regex) patterns matched against source topic names in the backup. All topics are restored when omitted. Filtering is applied before topicMapping renames.
+                nullable: true
+                properties:
+                  exclude:
+                    description: Glob patterns for topics to exclude
+                    items:
+                      type: string
+                    type: array
+                  include:
+                    description: Glob patterns for topics to include
+                    items:
+                      type: string
+                    type: array
+                type: object
             required:
             - backupRef
             - strimziClusterRef

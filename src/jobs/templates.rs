@@ -353,6 +353,13 @@ pub fn apply_pod_template(pod_spec: &mut PodSpec, template: Option<&CrdPodTempla
         if !pod_overrides.host_aliases.is_empty() {
             pod_spec.host_aliases = Some(pod_overrides.host_aliases.clone());
         }
+
+        if let Some(sa) = &pod_overrides.service_account_name {
+            let sa = sa.trim();
+            if !sa.is_empty() {
+                pod_spec.service_account_name = Some(sa.to_string());
+            }
+        }
     }
 
     if let Some(container_overrides) = &tmpl.container {

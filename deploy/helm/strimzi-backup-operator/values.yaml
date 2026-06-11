@@ -25,8 +25,11 @@ serviceAccount:
   name: ""
 
 backupJobs:
-  # Service account used by backup and restore job pods.
+  # Default service account used by backup and restore job pods.
   # If empty, the chart passes the operator service account name.
+  # The account must exist in each namespace where KafkaBackup/KafkaRestore
+  # resources are created; individual resources can override it with
+  # spec.template.pod.serviceAccountName.
   serviceAccountName: ""
 
 # Azure Workload Identity configuration

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use super::common::{
     AuthenticationSpec, Condition, KafkaConnectionSpec, LoggingSpec, MetricsSpec, PodTemplateSpec,
-    ResourceRequirementsSpec, RestoreInfo, StrimziClusterRef,
+    ResourceRequirementsSpec, RestoreInfo, StrimziClusterRef, TopicSelection,
 };
 
 /// KafkaRestore defines a restore operation from a KafkaBackup to a Strimzi-managed Kafka cluster.
@@ -34,6 +34,12 @@ pub struct KafkaRestoreSpec {
 
     /// Reference to the source backup
     pub backup_ref: BackupRef,
+
+    /// Topics to restore, selected by include/exclude glob (or `~`-prefixed regex)
+    /// patterns matched against source topic names in the backup. All topics are
+    /// restored when omitted. Filtering is applied before topicMapping renames.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub topics: Option<TopicSelection>,
 
     /// Point-in-time recovery settings
     #[serde(skip_serializing_if = "Option::is_none")]

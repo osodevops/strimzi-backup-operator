@@ -6,6 +6,7 @@ use crate::strimzi::kafka_cr::ResolvedKafkaCluster;
 use crate::strimzi::kafka_user::ResolvedAuth;
 use crate::strimzi::tls::ResolvedTlsCerts;
 
+use super::backup_config::build_topic_selection;
 use super::logging_config::build_logging_config;
 use super::storage_config::build_storage_config;
 
@@ -32,7 +33,13 @@ pub fn build_restore_config_yaml(
     );
 
     // Target (Kafka cluster)
-    let target = build_kafka_config(cluster, tls_certs, auth, restore.spec.connection.as_ref())?;
+    let target = build_kafka_config(
+        cluster,
+        tls_certs,
+        auth,
+        restore.spec.topics.as_ref(),
+        restore.spec.connection.as_ref(),
+    )?;
     config.insert(Value::String("target".to_string()), target);
 
     // Storage (from source backup CR)
@@ -75,6 +82,7 @@ fn build_kafka_config(
     cluster: &ResolvedKafkaCluster,
     _tls_certs: &Option<ResolvedTlsCerts>,
     auth: &ResolvedAuth,
+    topics: Option<&crate::crd::common::TopicSelection>,
     connection: Option<&crate::crd::common::KafkaConnectionSpec>,
 ) -> Result<Value> {
     let mut kafka = serde_yaml::Mapping::new();
@@ -136,6 +144,15 @@ fn build_kafka_config(
         Value::String("security".to_string()),
         Value::Mapping(security),
     );
+
+    if let Some(topics) = topics {
+        let topic_config = build_topic_selection(topics);
+        if let Value::Mapping(ref m) = topic_config {
+            if !m.is_empty() {
+                kafka.insert(Value::String("topics".to_string()), topic_config);
+            }
+        }
+    }
 
     if let Some(connection) = connection {
         let connection_config = build_connection_config(connection);
