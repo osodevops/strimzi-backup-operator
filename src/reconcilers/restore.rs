@@ -10,9 +10,10 @@ use kube::{
 use tracing::{debug, error, info, warn};
 
 use crate::adapters::restore_config::build_restore_config_yaml;
-use crate::crd::common::{RestoreInfo, RestoreStatus};
+use crate::crd::common::{Condition, RestoreInfo, RestoreStatus};
 use crate::crd::{KafkaBackup, KafkaRestore, KafkaRestoreStatus};
 use crate::error::{Error, Result};
+use crate::jobs::job_state::{classify_jobs, JobsState};
 use crate::jobs::restore_job::build_restore_job;
 use crate::metrics::prometheus::MetricsState;
 use crate::reconcilers::{job_service_account_name, FINALIZER};
@@ -56,6 +57,75 @@ pub async fn reconcile_restore(
             return Ok(());
         }
     }
+
+    // Decide from the full set of Jobs for this restore. A Job in any state —
+    // running, pending, succeeded, or failed — must suppress creating another
+    // one: restores are one-shot, and pod retries belong to the Job's
+    // backoffLimit (issue #29: a completed Job has `active=0`, which used to
+    // read as "no job running" and re-ran the restore on every requeue).
+    let jobs_api: Api<Job> = Api::namespaced(client.clone(), &namespace);
+    let lp = kube::api::ListParams::default().labels(&format!(
+        "kafkabackup.com/restore={name},kafkabackup.com/type=restore"
+    ));
+    let jobs = jobs_api.list(&lp).await?;
+
+    match classify_jobs(&jobs.items) {
+        JobsState::Succeeded { job_name } => {
+            info!(%job_name, "Restore job completed successfully");
+            let job_status = jobs
+                .items
+                .iter()
+                .find(|j| j.metadata.name.as_deref() == Some(job_name.as_str()))
+                .and_then(|j| j.status.as_ref());
+            let now = Utc::now();
+            let restore_info = RestoreInfo {
+                start_time: job_status
+                    .and_then(|s| s.start_time.as_ref())
+                    .map(|t| t.0)
+                    .unwrap_or(now),
+                completion_time: Some(
+                    job_status
+                        .and_then(|s| s.completion_time.as_ref())
+                        .map(|t| t.0)
+                        .unwrap_or(now),
+                ),
+                status: RestoreStatus::Completed,
+                restored_topics: None,
+                restored_partitions: None,
+                restored_bytes: None,
+                point_in_time_target: None,
+                actual_point_in_time: None,
+            };
+            update_status_completed(&restore_api, &name, generation, &restore_info).await?;
+            return Ok(());
+        }
+        JobsState::Failed { job_name } => {
+            // Terminal: do not re-create the Job. Patch once — repeating the
+            // patch would churn lastTransitionTime and retrigger the watch.
+            if !has_condition_reason(
+                restore.status.as_ref(),
+                CONDITION_TYPE_ERROR,
+                REASON_RESTORE_FAILED,
+            ) {
+                error!(%job_name, "Restore job failed");
+                update_status_failed(&restore_api, &name, generation, &job_name).await?;
+            }
+            return Ok(());
+        }
+        JobsState::InProgress => {
+            if !has_condition_reason(
+                restore.status.as_ref(),
+                CONDITION_TYPE_READY,
+                REASON_RESTORE_RUNNING,
+            ) {
+                update_status_running(&restore_api, &name, generation).await?;
+            }
+            return Ok(());
+        }
+        JobsState::NoJobs => {}
+    }
+
+    // No Job exists yet — resolve dependencies and create one.
 
     // Step 1: Resolve source backup CR
     let backup_api: Api<KafkaBackup> = Api::namespaced(client.clone(), &namespace);
@@ -114,34 +184,40 @@ pub async fn reconcile_restore(
     )
     .await?;
 
-    // Step 6: Create restore Job if not already running
-    let jobs_api: Api<Job> = Api::namespaced(client.clone(), &namespace);
-    if !is_job_running(&jobs_api, &name).await? {
-        let job_name = format!("{name}-{}", Utc::now().format("%Y%m%d-%H%M%S"));
-        let job_service_account = job_service_account_name();
-        let job = build_restore_job(
-            &restore,
-            &job_name,
-            &config_map_name,
-            &kafka_cluster,
-            &resolved_auth,
-            &source_backup,
-            job_service_account.as_deref(),
-        )?;
+    // Step 6: Create the restore Job
+    let job_name = format!("{name}-{}", Utc::now().format("%Y%m%d-%H%M%S"));
+    let job_service_account = job_service_account_name();
+    let job = build_restore_job(
+        &restore,
+        &job_name,
+        &config_map_name,
+        &kafka_cluster,
+        &resolved_auth,
+        &source_backup,
+        job_service_account.as_deref(),
+    )?;
 
-        jobs_api
-            .create(&PostParams::default(), &job)
-            .await
-            .map_err(|e| Error::JobCreationFailed(e.to_string()))?;
+    jobs_api
+        .create(&PostParams::default(), &job)
+        .await
+        .map_err(|e| Error::JobCreationFailed(e.to_string()))?;
 
-        info!(%job_name, "Created restore job");
-        update_status_running(&restore_api, &name, generation).await?;
-    }
-
-    // Step 7: Check job completion
-    check_job_completion(&client, &restore_api, &restore, generation).await?;
+    info!(%job_name, "Created restore job");
+    update_status_running(&restore_api, &name, generation).await?;
 
     Ok(())
+}
+
+/// Whether the current status has a condition of `condition_type` with the
+/// given reason. Used to avoid re-patching an identical status, which would
+/// churn `lastTransitionTime` and retrigger the watch.
+fn has_condition_reason(
+    status: Option<&KafkaRestoreStatus>,
+    condition_type: &str,
+    reason: &str,
+) -> bool {
+    let conditions: &[Condition] = status.map(|s| s.conditions.as_slice()).unwrap_or(&[]);
+    find_condition(conditions, condition_type).is_some_and(|c| c.reason.as_deref() == Some(reason))
 }
 
 async fn handle_cleanup(restore: &KafkaRestore, client: &Client, namespace: &str) -> Result<()> {
@@ -251,70 +327,6 @@ async fn create_or_update_config_map(
     Ok(())
 }
 
-async fn is_job_running(jobs_api: &Api<Job>, restore_name: &str) -> Result<bool> {
-    let lp = kube::api::ListParams::default().labels(&format!(
-        "kafkabackup.com/restore={restore_name},kafkabackup.com/type=restore"
-    ));
-    let jobs = jobs_api.list(&lp).await?;
-    let running = jobs
-        .iter()
-        .any(|j| j.status.as_ref().is_some_and(|s| s.active.unwrap_or(0) > 0));
-    Ok(running)
-}
-
-async fn check_job_completion(
-    client: &Client,
-    restore_api: &Api<KafkaRestore>,
-    restore: &KafkaRestore,
-    generation: i64,
-) -> Result<()> {
-    let name = restore.name_any();
-    let namespace = restore.namespace().unwrap_or_default();
-    let jobs_api: Api<Job> = Api::namespaced(client.clone(), &namespace);
-
-    let lp = kube::api::ListParams::default().labels(&format!(
-        "kafkabackup.com/restore={name},kafkabackup.com/type=restore"
-    ));
-    let jobs = jobs_api.list(&lp).await?;
-
-    for job in &jobs {
-        let job_name = job.metadata.name.as_deref().unwrap_or("");
-        if let Some(status) = &job.status {
-            if status.succeeded.unwrap_or(0) > 0 {
-                info!(%job_name, "Restore job completed successfully");
-                let now = Utc::now();
-                let restore_info = RestoreInfo {
-                    start_time: job
-                        .status
-                        .as_ref()
-                        .and_then(|s| s.start_time.as_ref())
-                        .map(|t| t.0)
-                        .unwrap_or(now),
-                    completion_time: Some(now),
-                    status: RestoreStatus::Completed,
-                    restored_topics: None,
-                    restored_partitions: None,
-                    restored_bytes: None,
-                    point_in_time_target: None,
-                    actual_point_in_time: None,
-                };
-                update_status_completed(restore_api, &name, generation, &restore_info).await?;
-            } else if status.failed.unwrap_or(0) > 0 {
-                error!(%job_name, "Restore job failed");
-                update_status_error(
-                    restore_api,
-                    &name,
-                    generation,
-                    &Error::JobCreationFailed(format!("Restore job {job_name} failed")),
-                )
-                .await?;
-            }
-        }
-    }
-
-    Ok(())
-}
-
 async fn update_status_running(api: &Api<KafkaRestore>, name: &str, generation: i64) -> Result<()> {
     let status = KafkaRestoreStatus {
         conditions: vec![not_ready(REASON_RESTORE_RUNNING, "Restore job is running")],
@@ -342,6 +354,23 @@ async fn update_status_completed(
         ],
         restore: Some(info.clone()),
         observed_generation: Some(generation),
+    };
+    patch_status(api, name, &status).await
+}
+
+async fn update_status_failed(
+    api: &Api<KafkaRestore>,
+    name: &str,
+    generation: i64,
+    job_name: &str,
+) -> Result<()> {
+    let status = KafkaRestoreStatus {
+        conditions: error_conditions(
+            REASON_RESTORE_FAILED,
+            &format!("Restore job {job_name} failed"),
+        ),
+        observed_generation: Some(generation),
+        ..Default::default()
     };
     patch_status(api, name, &status).await
 }

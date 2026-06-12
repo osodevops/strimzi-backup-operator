@@ -16,6 +16,7 @@ use crate::crd::{KafkaBackup, KafkaBackupStatus};
 use crate::error::{Error, Result};
 use crate::jobs::backup_job::build_backup_job;
 use crate::jobs::cronjob::build_backup_cronjob;
+use crate::jobs::job_state::{classify_jobs, job_failed, job_succeeded, should_create_backup_job};
 use crate::metrics::prometheus::MetricsState;
 use crate::reconcilers::{
     job_service_account_name, FINALIZER, TRIGGER_ANNOTATION, TRIGGER_VALUE_NOW,
@@ -131,22 +132,27 @@ pub async fn reconcile_backup(
         .and_then(|a| a.get(TRIGGER_ANNOTATION))
         .is_some_and(|v| v == TRIGGER_VALUE_NOW);
 
-    // Step 7: Create one-shot Job (if no schedule, or if manually triggered)
+    // Step 7: Create one-shot Job (if no schedule, or if manually triggered).
+    // A one-shot run must only be created when no Job exists for this CR at
+    // all — a succeeded or failed Job has `active=0`, and treating it as "no
+    // job running" re-ran the backup on every requeue (issue #29). A manual
+    // trigger explicitly requests a fresh run, but never stacks onto an
+    // active Job.
     if backup.spec.schedule.is_none() || triggered {
-        let job_name = format!("{name}-{}", Utc::now().format("%Y%m%d-%H%M%S"));
-        let job = build_backup_job(
-            &backup,
-            &job_name,
-            &config_map_name,
-            &kafka_cluster,
-            &resolved_auth,
-            job_service_account.as_deref(),
-        )?;
-
         let jobs_api: Api<Job> = Api::namespaced(client.clone(), &namespace);
+        let jobs = jobs_api.list(&backup_jobs_selector(&name)).await?;
 
-        // Check if a job is already running
-        if !is_job_running(&jobs_api, &name).await? {
+        if should_create_backup_job(&classify_jobs(&jobs.items), triggered) {
+            let job_name = format!("{name}-{}", Utc::now().format("%Y%m%d-%H%M%S"));
+            let job = build_backup_job(
+                &backup,
+                &job_name,
+                &config_map_name,
+                &kafka_cluster,
+                &resolved_auth,
+                job_service_account.as_deref(),
+            )?;
+
             jobs_api
                 .create(&PostParams::default(), &job)
                 .await
@@ -155,7 +161,7 @@ pub async fn reconcile_backup(
             info!(%job_name, "Created backup job");
             update_status_running(&backup_api, &name, generation).await?;
         } else {
-            debug!(%name, "Backup job already running, skipping");
+            debug!(%name, "Backup job already exists, skipping creation");
         }
 
         // Remove trigger annotation if present
@@ -303,15 +309,10 @@ async fn create_or_update_config_map(
     Ok(())
 }
 
-async fn is_job_running(jobs_api: &Api<Job>, backup_name: &str) -> Result<bool> {
-    let lp = kube::api::ListParams::default().labels(&format!(
+fn backup_jobs_selector(backup_name: &str) -> kube::api::ListParams {
+    kube::api::ListParams::default().labels(&format!(
         "kafkabackup.com/backup={backup_name},kafkabackup.com/type=backup"
-    ));
-    let jobs = jobs_api.list(&lp).await?;
-    let running = jobs
-        .iter()
-        .any(|j| j.status.as_ref().is_some_and(|s| s.active.unwrap_or(0) > 0));
-    Ok(running)
+    ))
 }
 
 async fn apply_retention_policy(
@@ -367,10 +368,7 @@ async fn active_backup_ids(
     backup: &KafkaBackup,
 ) -> Result<BTreeSet<String>> {
     let jobs_api: Api<Job> = Api::namespaced(client.clone(), namespace);
-    let lp = kube::api::ListParams::default().labels(&format!(
-        "kafkabackup.com/backup={backup_name},kafkabackup.com/type=backup"
-    ));
-    let jobs = jobs_api.list(&lp).await?;
+    let jobs = jobs_api.list(&backup_jobs_selector(backup_name)).await?;
     let mut active = BTreeSet::new();
 
     for job in jobs {
@@ -402,47 +400,75 @@ async fn check_job_completion(
     let name = backup.name_any();
     let namespace = backup.namespace().unwrap_or_default();
     let jobs_api: Api<Job> = Api::namespaced(client.clone(), &namespace);
+    let jobs = jobs_api.list(&backup_jobs_selector(&name)).await?;
 
-    let lp = kube::api::ListParams::default().labels(&format!(
-        "kafkabackup.com/backup={name},kafkabackup.com/type=backup"
-    ));
-    let jobs = jobs_api.list(&lp).await?;
+    // Record only the most recent terminal Job, and only once — re-patching
+    // an already-recorded outcome churns the status (fresh lastTransitionTime
+    // and completionTime) and retriggers the watch on every reconcile.
+    let latest_terminal = jobs
+        .items
+        .iter()
+        .filter(|j| job_succeeded(j) || job_failed(j))
+        .max_by_key(|j| {
+            j.status
+                .as_ref()
+                .and_then(|s| s.start_time.as_ref())
+                .map(|t| t.0)
+        });
+    let Some(job) = latest_terminal else {
+        return Ok(());
+    };
+    let job_name = job.metadata.name.as_deref().unwrap_or("");
 
-    for job in &jobs {
-        let job_name = job.metadata.name.as_deref().unwrap_or("");
-        if let Some(status) = &job.status {
-            if status.succeeded.unwrap_or(0) > 0 {
-                info!(%job_name, "Backup job completed successfully");
-                let backup_id = job_name.to_string();
-                let now = Utc::now();
-
-                let history_entry = BackupHistoryEntry {
-                    id: backup_id.clone(),
-                    status: BackupStatus::Completed,
-                    start_time: job
-                        .status
-                        .as_ref()
-                        .and_then(|s| s.start_time.as_ref())
-                        .map(|t| t.0)
-                        .unwrap_or(now),
-                    completion_time: Some(now),
-                    size_bytes: None,
-                    topics_backed_up: None,
-                    partitions_backed_up: None,
-                };
-
-                update_status_completed(backup_api, &name, generation, &history_entry).await?;
-            } else if status.failed.unwrap_or(0) > 0 {
-                error!(%job_name, "Backup job failed");
-                update_status_error(
-                    backup_api,
-                    &name,
-                    generation,
-                    &Error::JobCreationFailed(format!("Job {job_name} failed")),
-                )
-                .await?;
-            }
+    if job_succeeded(job) {
+        let already_recorded = backup
+            .status
+            .as_ref()
+            .and_then(|s| s.last_backup.as_ref())
+            .is_some_and(|lb| lb.id == job_name);
+        if already_recorded {
+            return Ok(());
         }
+
+        info!(%job_name, "Backup job completed successfully");
+        let now = Utc::now();
+        let job_status = job.status.as_ref();
+        let history_entry = BackupHistoryEntry {
+            id: job_name.to_string(),
+            status: BackupStatus::Completed,
+            start_time: job_status
+                .and_then(|s| s.start_time.as_ref())
+                .map(|t| t.0)
+                .unwrap_or(now),
+            completion_time: Some(
+                job_status
+                    .and_then(|s| s.completion_time.as_ref())
+                    .map(|t| t.0)
+                    .unwrap_or(now),
+            ),
+            size_bytes: None,
+            topics_backed_up: None,
+            partitions_backed_up: None,
+        };
+
+        update_status_completed(backup_api, &name, generation, &history_entry).await?;
+    } else {
+        let message = format!("Backup job {job_name} failed");
+        let already_recorded = backup
+            .status
+            .as_ref()
+            .map(|s| s.conditions.as_slice())
+            .and_then(|c| find_condition(c, CONDITION_TYPE_ERROR))
+            .is_some_and(|c| c.message.as_deref() == Some(message.as_str()));
+        if already_recorded {
+            return Ok(());
+        }
+
+        error!(%job_name, "Backup job failed");
+        let mut status = current_backup_status(backup_api, &name).await?;
+        status.conditions = error_conditions(REASON_BACKUP_FAILED, &message);
+        status.observed_generation = Some(generation);
+        patch_status(backup_api, &name, &status).await?;
     }
 
     Ok(())
@@ -462,6 +488,13 @@ async fn update_status_scheduled(
     next_backup: &str,
 ) -> Result<()> {
     let mut status = current_backup_status(api, name).await?;
+    let already_current = find_condition(&status.conditions, CONDITION_TYPE_READY)
+        .is_some_and(|c| c.reason.as_deref() == Some(REASON_BACKUP_SCHEDULED))
+        && status.next_scheduled_backup.as_deref() == Some(next_backup)
+        && status.observed_generation == Some(generation);
+    if already_current {
+        return Ok(());
+    }
     status.conditions = vec![ready(
         REASON_BACKUP_SCHEDULED,
         &format!("Next backup scheduled: {next_backup}"),
@@ -476,6 +509,14 @@ async fn update_status_suspended(
     name: &str,
     generation: i64,
 ) -> Result<()> {
+    let current = current_backup_status(api, name).await?;
+    let already_current = find_condition(&current.conditions, CONDITION_TYPE_READY)
+        .is_some_and(|c| c.reason.as_deref() == Some(REASON_BACKUP_SUSPENDED))
+        && current.next_scheduled_backup.is_none()
+        && current.observed_generation == Some(generation);
+    if already_current {
+        return Ok(());
+    }
     // Manual merge patch: `nextScheduledBackup` must be an explicit null to be
     // cleared, but `KafkaBackupStatus` skips `None` fields when serializing.
     let condition = ready(REASON_BACKUP_SUSPENDED, "Backup schedule is suspended");
