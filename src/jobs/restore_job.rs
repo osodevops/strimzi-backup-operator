@@ -103,7 +103,9 @@ pub fn build_restore_job(
             ..Default::default()
         },
         spec: Some(JobSpec {
-            backoff_limit: Some(3),
+            // Restores append/purge data: default to a single attempt so a
+            // partially completed restore is never re-applied implicitly.
+            backoff_limit: Some(restore.spec.backoff_limit.unwrap_or(0)),
             template: PodTemplateSpec {
                 metadata: Some(ObjectMeta {
                     labels: Some(build_labels(&cr_name, &cluster.name, "restore")),

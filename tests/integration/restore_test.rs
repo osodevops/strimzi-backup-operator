@@ -49,6 +49,7 @@ fn sample_backup() -> KafkaBackup {
         resources: None,
         template: None,
         image: None,
+        backoff_limit: None,
     };
     let mut backup = KafkaBackup::new("daily-backup", spec);
     backup.metadata.namespace = Some("kafka".to_string());
@@ -120,6 +121,7 @@ fn sample_restore() -> KafkaRestore {
         resources: None,
         template: None,
         image: None,
+        backoff_limit: None,
     };
     let mut restore = KafkaRestore::new("pitr-restore", spec);
     restore.metadata.namespace = Some("kafka".to_string());
@@ -391,4 +393,42 @@ fn test_restore_job_applies_template_service_account() {
         pod_spec.service_account_name.as_deref(),
         Some("restore-jobs")
     );
+}
+
+/// Issue #31: restores append to or purge target topics, so a retried Job pod
+/// re-applies a partially completed restore. The default must be exactly one
+/// attempt (backoffLimit 0); retries are opt-in via spec.backoffLimit.
+#[test]
+fn test_restore_job_default_backoff_limit_is_zero() {
+    let restore = sample_restore();
+    let job = build_restore_job(
+        &restore,
+        "pitr-restore-20260213-093000",
+        "pitr-restore-config",
+        &sample_cluster(),
+        &ResolvedAuth::None,
+        &sample_backup(),
+        None,
+    )
+    .unwrap();
+
+    assert_eq!(job.spec.as_ref().unwrap().backoff_limit, Some(0));
+}
+
+#[test]
+fn test_restore_job_custom_backoff_limit() {
+    let mut restore = sample_restore();
+    restore.spec.backoff_limit = Some(2);
+    let job = build_restore_job(
+        &restore,
+        "pitr-restore-20260213-093000",
+        "pitr-restore-config",
+        &sample_cluster(),
+        &ResolvedAuth::None,
+        &sample_backup(),
+        None,
+    )
+    .unwrap();
+
+    assert_eq!(job.spec.as_ref().unwrap().backoff_limit, Some(2));
 }

@@ -89,6 +89,13 @@ pub struct KafkaBackupSpec {
     /// Container image for the backup job (default: osodevops/kafka-backup:v0.15.6)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub image: Option<String>,
+
+    /// Number of pod retries before a backup Job is marked failed
+    /// (`spec.backoffLimit` on generated Jobs, including scheduled CronJob
+    /// runs). Defaults to 3.
+    #[schemars(range(min = 0))]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub backoff_limit: Option<i32>,
 }
 
 /// Backup-specific options

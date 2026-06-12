@@ -93,6 +93,12 @@ spec:
                 required:
                 - type
                 type: object
+              backoffLimit:
+                description: 'Number of pod retries before the restore Job is marked failed (`spec.backoffLimit` on the generated Job). Defaults to 0 so a restore runs exactly once: restores append to or purge target topics, so a retry of a partially completed attempt can duplicate data and must be opted into deliberately.'
+                format: int32
+                minimum: 0.0
+                nullable: true
+                type: integer
               backupRef:
                 description: Reference to the source backup
                 properties:

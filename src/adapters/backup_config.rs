@@ -507,6 +507,7 @@ mod tests {
             resources: None,
             template: None,
             image: None,
+            backoff_limit: None,
             consumer_groups: None,
         };
         let mut backup = KafkaBackup::new("test-backup", spec);

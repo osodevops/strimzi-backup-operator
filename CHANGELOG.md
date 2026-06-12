@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## 0.2.10 - 2026-06-12
 
+### Added
+
+- Add `spec.backoffLimit` to `KafkaRestore` and `KafkaBackup` to control pod retries on generated Jobs (including scheduled CronJob runs). Fixes [#31](https://github.com/osodevops/strimzi-backup-operator/issues/31).
+
+### Changed
+
+- Restore Jobs now default to `backoffLimit: 0` (a single attempt, previously 3): restores append to or purge target topics, so retrying a partially completed attempt can duplicate data. Set `spec.backoffLimit` explicitly to opt into retries. Backup Jobs keep the previous default of 3.
+
 ### Fixed
 
 - Delete Jobs, CronJobs, and ConfigMaps with explicit Background propagation when a `KafkaBackup`/`KafkaRestore` is deleted. The batch/v1 Job API's legacy default deletion propagation is `Orphan`, which stripped the Job ownerReference from its pods and left Completed pods behind. Fixes [#30](https://github.com/osodevops/strimzi-backup-operator/issues/30).

@@ -85,6 +85,15 @@ pub struct KafkaRestoreSpec {
     /// Container image for the restore job (default: osodevops/kafka-backup:v0.15.6)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub image: Option<String>,
+
+    /// Number of pod retries before the restore Job is marked failed
+    /// (`spec.backoffLimit` on the generated Job). Defaults to 0 so a restore
+    /// runs exactly once: restores append to or purge target topics, so a
+    /// retry of a partially completed attempt can duplicate data and must be
+    /// opted into deliberately.
+    #[schemars(range(min = 0))]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub backoff_limit: Option<i32>,
 }
 
 /// Reference to a KafkaBackup CR and optional specific backup snapshot

@@ -53,6 +53,7 @@ fn scheduled_backup(suspend: bool) -> KafkaBackup {
         resources: None,
         template: None,
         image: None,
+        backoff_limit: None,
     };
     let mut backup = KafkaBackup::new("daily-backup", spec);
     backup.metadata.namespace = Some("kafka".to_string());

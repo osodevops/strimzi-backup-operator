@@ -96,6 +96,12 @@ spec:
                 required:
                 - type
                 type: object
+              backoffLimit:
+                description: Number of pod retries before a backup Job is marked failed (`spec.backoffLimit` on generated Jobs, including scheduled CronJob runs). Defaults to 3.
+                format: int32
+                minimum: 0.0
+                nullable: true
+                type: integer
               backup:
                 description: Backup options (compression, encryption, parallelism)
                 nullable: true
