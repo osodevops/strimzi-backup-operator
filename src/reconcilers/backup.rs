@@ -19,7 +19,8 @@ use crate::jobs::cronjob::build_backup_cronjob;
 use crate::jobs::job_state::{classify_jobs, job_failed, job_succeeded, should_create_backup_job};
 use crate::metrics::prometheus::MetricsState;
 use crate::reconcilers::{
-    job_service_account_name, FINALIZER, TRIGGER_ANNOTATION, TRIGGER_VALUE_NOW,
+    cleanup_delete_params, job_service_account_name, FINALIZER, TRIGGER_ANNOTATION,
+    TRIGGER_VALUE_NOW,
 };
 use crate::retention::policy::evaluate_retention;
 use crate::retention::storage::{discover_backup_history, prune_backup_ids};
@@ -189,9 +190,7 @@ async fn handle_cleanup(backup: &KafkaBackup, client: &Client, namespace: &str) 
     if let Ok(job_list) = jobs_api.list(&lp).await {
         for job in job_list {
             let job_name = job.metadata.name.unwrap_or_default();
-            let _ = jobs_api
-                .delete(&job_name, &kube::api::DeleteParams::default())
-                .await;
+            let _ = jobs_api.delete(&job_name, &cleanup_delete_params()).await;
         }
     }
 
@@ -200,15 +199,13 @@ async fn handle_cleanup(backup: &KafkaBackup, client: &Client, namespace: &str) 
         Api::namespaced(client.clone(), namespace);
     let cronjob_name = format!("{name}-scheduled");
     let _ = cronjob_api
-        .delete(&cronjob_name, &kube::api::DeleteParams::default())
+        .delete(&cronjob_name, &cleanup_delete_params())
         .await;
 
     // Delete ConfigMap
     let cm_api: Api<ConfigMap> = Api::namespaced(client.clone(), namespace);
     let cm_name = format!("{name}-config");
-    let _ = cm_api
-        .delete(&cm_name, &kube::api::DeleteParams::default())
-        .await;
+    let _ = cm_api.delete(&cm_name, &cleanup_delete_params()).await;
 
     // Remove finalizer
     let backup_api: Api<KafkaBackup> = Api::namespaced(client.clone(), namespace);

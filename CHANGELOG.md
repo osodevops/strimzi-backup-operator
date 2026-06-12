@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.10 - 2026-06-12
+
+### Fixed
+
+- Delete Jobs, CronJobs, and ConfigMaps with explicit Background propagation when a `KafkaBackup`/`KafkaRestore` is deleted. The batch/v1 Job API's legacy default deletion propagation is `Orphan`, which stripped the Job ownerReference from its pods and left Completed pods behind. Fixes [#30](https://github.com/osodevops/strimzi-backup-operator/issues/30).
+
 ## 0.2.9 - 2026-06-12
 
 ### Fixed
