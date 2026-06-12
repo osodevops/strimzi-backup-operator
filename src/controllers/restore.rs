@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use futures::StreamExt;
+use k8s_openapi::api::batch::v1::Job;
 use kube::{
     runtime::{
         controller::{Action, Controller},
@@ -46,6 +47,7 @@ fn error_policy(
 
 pub async fn run(client: Client, metrics: Arc<MetricsState>) {
     let restores = Api::<KafkaRestore>::all(client.clone());
+    let jobs = Api::<Job>::all(client.clone());
 
     let context = Arc::new(Context {
         client: client.clone(),
@@ -55,6 +57,12 @@ pub async fn run(client: Client, metrics: Arc<MetricsState>) {
     info!("Starting KafkaRestore controller");
 
     Controller::new(restores, Config::default().any_semantic())
+        // Watch owned Jobs so completion/failure updates the KafkaRestore
+        // status immediately instead of waiting for the periodic requeue.
+        .owns(
+            jobs,
+            Config::default().labels("kafkabackup.com/type=restore"),
+        )
         .shutdown_on_signal()
         .run(reconcile, error_policy, context)
         .for_each(|res| async move {
