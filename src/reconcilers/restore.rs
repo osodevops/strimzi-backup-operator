@@ -16,7 +16,7 @@ use crate::error::{Error, Result};
 use crate::jobs::job_state::{classify_jobs, JobsState};
 use crate::jobs::restore_job::build_restore_job;
 use crate::metrics::prometheus::MetricsState;
-use crate::reconcilers::{job_service_account_name, FINALIZER};
+use crate::reconcilers::{cleanup_delete_params, job_service_account_name, FINALIZER};
 use crate::status::conditions::*;
 use crate::strimzi::kafka_cr::resolve_kafka_cluster;
 use crate::strimzi::kafka_user::resolve_auth;
@@ -232,18 +232,14 @@ async fn handle_cleanup(restore: &KafkaRestore, client: &Client, namespace: &str
     if let Ok(job_list) = jobs_api.list(&lp).await {
         for job in job_list {
             let job_name = job.metadata.name.unwrap_or_default();
-            let _ = jobs_api
-                .delete(&job_name, &kube::api::DeleteParams::default())
-                .await;
+            let _ = jobs_api.delete(&job_name, &cleanup_delete_params()).await;
         }
     }
 
     // Delete ConfigMap
     let cm_api: Api<ConfigMap> = Api::namespaced(client.clone(), namespace);
     let cm_name = format!("{name}-config");
-    let _ = cm_api
-        .delete(&cm_name, &kube::api::DeleteParams::default())
-        .await;
+    let _ = cm_api.delete(&cm_name, &cleanup_delete_params()).await;
 
     // Remove finalizer
     let restore_api: Api<KafkaRestore> = Api::namespaced(client.clone(), namespace);

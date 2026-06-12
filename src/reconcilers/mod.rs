@@ -22,6 +22,16 @@ pub const JOB_SERVICE_ACCOUNT_ENV: &str = "BACKUP_JOB_SERVICE_ACCOUNT";
 /// `serviceAccount.name` overrides.
 pub const DEFAULT_JOB_SERVICE_ACCOUNT: &str = "strimzi-backup-operator";
 
+/// Delete parameters for cleaning up resources owned by a backup/restore CR
+/// (Jobs, CronJobs, ConfigMaps) when the CR is deleted.
+///
+/// Background propagation must be explicit: the batch/v1 Job API's legacy
+/// server-side default is `Orphan`, which strips the Job ownerReference from
+/// its pods instead of deleting them, leaving Completed pods behind.
+pub fn cleanup_delete_params() -> kube::api::DeleteParams {
+    kube::api::DeleteParams::background()
+}
+
 pub fn job_service_account_name() -> Option<String> {
     let value = std::env::var(JOB_SERVICE_ACCOUNT_ENV)
         .unwrap_or_else(|_| DEFAULT_JOB_SERVICE_ACCOUNT.to_string());

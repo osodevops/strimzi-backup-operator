@@ -78,6 +78,7 @@ fn sample_backup() -> KafkaBackup {
         resources: None,
         template: None,
         image: None,
+        backoff_limit: None,
     };
     let mut backup = KafkaBackup::new("daily-backup", spec);
     backup.metadata.namespace = Some("kafka".to_string());
@@ -463,4 +464,62 @@ fn test_backup_job_falls_back_to_operator_service_account() {
         pod_spec.service_account_name.as_deref(),
         Some("strimzi-backup-operator")
     );
+}
+
+/// Backups are safe to retry; the historical default of 3 is kept.
+#[test]
+fn test_backup_job_default_backoff_limit_is_three() {
+    let backup = sample_backup();
+    let job = build_backup_job(
+        &backup,
+        "daily-backup-20260213-020000",
+        "daily-backup-config",
+        &sample_cluster(),
+        &ResolvedAuth::None,
+        None,
+    )
+    .unwrap();
+
+    assert_eq!(job.spec.as_ref().unwrap().backoff_limit, Some(3));
+}
+
+#[test]
+fn test_backup_job_custom_backoff_limit() {
+    let mut backup = sample_backup();
+    backup.spec.backoff_limit = Some(1);
+    let job = build_backup_job(
+        &backup,
+        "daily-backup-20260213-020000",
+        "daily-backup-config",
+        &sample_cluster(),
+        &ResolvedAuth::None,
+        None,
+    )
+    .unwrap();
+
+    assert_eq!(job.spec.as_ref().unwrap().backoff_limit, Some(1));
+}
+
+#[test]
+fn test_backup_cronjob_custom_backoff_limit() {
+    let mut backup = sample_backup();
+    backup.spec.backoff_limit = Some(0);
+    let cronjob = build_backup_cronjob(
+        &backup,
+        "daily-backup-config",
+        &sample_cluster(),
+        &ResolvedAuth::None,
+        None,
+    )
+    .unwrap();
+
+    let job_spec = cronjob
+        .spec
+        .as_ref()
+        .unwrap()
+        .job_template
+        .spec
+        .as_ref()
+        .unwrap();
+    assert_eq!(job_spec.backoff_limit, Some(0));
 }

@@ -99,7 +99,7 @@ pub fn build_backup_job(
             ..Default::default()
         },
         spec: Some(JobSpec {
-            backoff_limit: Some(3),
+            backoff_limit: Some(backup.spec.backoff_limit.unwrap_or(3)),
             template: PodTemplateSpec {
                 metadata: Some(ObjectMeta {
                     labels: Some(build_labels(&cr_name, &cluster.name, "backup")),
@@ -163,6 +163,7 @@ mod tests {
             resources: None,
             template: None,
             image: None,
+            backoff_limit: None,
         };
 
         let mut backup = KafkaBackup::new("test-backup", spec);

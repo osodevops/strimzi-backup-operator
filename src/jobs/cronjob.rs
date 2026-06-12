@@ -108,7 +108,7 @@ pub fn build_backup_cronjob(
                     ..Default::default()
                 }),
                 spec: Some(JobSpec {
-                    backoff_limit: Some(3),
+                    backoff_limit: Some(backup.spec.backoff_limit.unwrap_or(3)),
                     template: PodTemplateSpec {
                         metadata: Some(ObjectMeta {
                             labels: Some(labels),
