@@ -351,6 +351,33 @@ fn test_restore_config_topic_selection() {
     assert_eq!(topics["exclude"][0].as_str(), Some("*-internal"));
 }
 
+/// Issue #35: the kafka-backup binary's config parser only accepts
+/// `SCRAM-SHA512` (no hyphen before the digits); `SCRAM-SHA-512` is
+/// rejected with "unknown variant".
+#[test]
+fn test_restore_scram_auth_emits_binary_compatible_sasl_mechanism() {
+    let restore = sample_restore();
+    let backup = sample_backup();
+    let cluster = sample_cluster();
+    let auth = ResolvedAuth::ScramSha512 {
+        username: "kafka-backup".to_string(),
+        secret_name: "kafka-backup".to_string(),
+        password_key: "password".to_string(),
+    };
+
+    let yaml = build_restore_config_yaml(&restore, &backup, &cluster, &None, &auth).unwrap();
+
+    let config: serde_yaml::Value = serde_yaml::from_str(&yaml).unwrap();
+    assert_eq!(
+        config["target"]["security"]["sasl_mechanism"].as_str(),
+        Some("SCRAM-SHA512")
+    );
+    assert_eq!(
+        config["target"]["security"]["security_protocol"].as_str(),
+        Some("SASL_SSL")
+    );
+}
+
 #[test]
 fn test_restore_config_omits_topic_selection_by_default() {
     let restore = sample_restore();

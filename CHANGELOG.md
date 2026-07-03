@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.11 - 2026-07-03
+
+### Fixed
+
+- Write `sasl_mechanism: SCRAM-SHA512` (no hyphen before the digits) into generated backup and restore ConfigMaps. The kafka-backup binary's config parser only accepts `SCRAM-SHA512`, so jobs for resources using `authentication.type: scram-sha-512` failed on startup with `unknown variant 'SCRAM-SHA-512'`. Fixes [#35](https://github.com/osodevops/strimzi-backup-operator/issues/35).
+
 ## 0.2.10 - 2026-06-12
 
 ### Added

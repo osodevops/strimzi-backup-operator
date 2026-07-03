@@ -150,7 +150,7 @@ fn build_kafka_config(
         } => {
             security.insert(
                 Value::String("sasl_mechanism".to_string()),
-                Value::String("SCRAM-SHA-512".to_string()),
+                Value::String(super::SASL_MECHANISM_SCRAM_SHA512.to_string()),
             );
             security.insert(
                 Value::String("sasl_username".to_string()),
@@ -558,6 +558,25 @@ mod tests {
         assert!(yaml.contains("output: stderr"));
         assert!(yaml.contains("kafka_backup: debug"));
         assert!(yaml.contains("rdkafka: info"));
+    }
+
+    /// Issue #35: the kafka-backup binary's config parser only accepts
+    /// `SCRAM-SHA512` (no hyphen before the digits); `SCRAM-SHA-512` is
+    /// rejected with "unknown variant".
+    #[test]
+    fn test_scram_auth_emits_binary_compatible_sasl_mechanism() {
+        let backup = test_backup();
+        let auth = ResolvedAuth::ScramSha512 {
+            username: "kafka-backup".to_string(),
+            secret_name: "kafka-backup".to_string(),
+            password_key: "password".to_string(),
+        };
+        let yaml = build_backup_config_yaml(&backup, &test_cluster(), &None, &auth).unwrap();
+        let config: Value = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(
+            config["source"]["security"]["sasl_mechanism"].as_str(),
+            Some("SCRAM-SHA512")
+        );
     }
 
     #[test]
