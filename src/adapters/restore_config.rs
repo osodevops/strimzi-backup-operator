@@ -126,7 +126,7 @@ fn build_kafka_config(
         ResolvedAuth::ScramSha512 { username, .. } => {
             security.insert(
                 Value::String("sasl_mechanism".to_string()),
-                Value::String("SCRAM-SHA-512".to_string()),
+                Value::String(super::SASL_MECHANISM_SCRAM_SHA512.to_string()),
             );
             security.insert(
                 Value::String("sasl_username".to_string()),
