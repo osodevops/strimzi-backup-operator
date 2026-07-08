@@ -59,14 +59,20 @@ pub async fn reconcile_backup(
     let generation = backup.metadata.generation.unwrap_or(0);
 
     // Step 1: Resolve Strimzi Kafka cluster
-    let kafka_cluster =
-        match resolve_kafka_cluster(&client, &backup.spec.strimzi_cluster_ref, &namespace).await {
-            Ok(cluster) => cluster,
-            Err(e) => {
-                update_status_error(&backup_api, &name, generation, &e).await?;
-                return Err(e);
-            }
-        };
+    let kafka_cluster = match resolve_kafka_cluster(
+        &client,
+        &backup.spec.strimzi_cluster_ref,
+        &namespace,
+        backup.spec.authentication.as_ref().map(|a| &a.auth_type),
+    )
+    .await
+    {
+        Ok(cluster) => cluster,
+        Err(e) => {
+            update_status_error(&backup_api, &name, generation, &e).await?;
+            return Err(e);
+        }
+    };
 
     // Step 2: Resolve TLS certificates
     let tls_certs = match resolve_cluster_ca(

@@ -24,6 +24,13 @@ pub enum Error {
     #[error("Invalid configuration: {0}")]
     InvalidConfig(String),
 
+    #[error("No listener on Kafka cluster '{cluster}' matches authentication type '{desired}'; available listeners: {available}. Set spec.strimziClusterRef.listener to select one explicitly")]
+    NoCompatibleListener {
+        cluster: String,
+        desired: String,
+        available: String,
+    },
+
     #[error("Storage error: {0}")]
     Storage(String),
 
@@ -56,6 +63,7 @@ impl Error {
             Error::SecretKeyMissing { .. } => "SecretKeyMissing",
             Error::KafkaUserNotFound { .. } => "KafkaUserNotFound",
             Error::InvalidConfig(_) => "InvalidConfiguration",
+            Error::NoCompatibleListener { .. } => "NoCompatibleListener",
             Error::Storage(_) => "StorageError",
             Error::BackupNotFound { .. } => "BackupNotFound",
             Error::JobCreationFailed(_) => "JobCreationFailed",

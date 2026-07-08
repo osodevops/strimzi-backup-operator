@@ -645,6 +645,10 @@ spec:
                     - key
                     - name
                     type: object
+                  listener:
+                    description: Optional name of the Kafka listener to connect through. When unset, the operator picks a listener whose authentication type matches this resource's spec.authentication, preferring in-cluster and TLS-encrypted listeners. Set this to override the automatic selection.
+                    nullable: true
+                    type: string
                   name:
                     description: Name of the Kafka CR
                     type: string
