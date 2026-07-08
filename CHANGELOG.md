@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.12 - 2026-07-08
+
+### Added
+
+- Add `spec.strimziClusterRef.listener` to `KafkaBackup` and `KafkaRestore` to select the Kafka listener by name, overriding the automatic selection.
+
+### Fixed
+
+- Connect backup and restore jobs through a Kafka listener whose `authentication.type` matches the resource's `spec.authentication`, instead of always preferring the first TLS listener. Jobs using `scram-sha-512` were routed to a mutual-TLS listener when one existed, and the broker rejected the handshake with `CertificateRequired` since SCRAM clients carry no client certificate. Among matching listeners, in-cluster (`internal`, `cluster-ip`) and TLS-encrypted listeners are preferred; the bootstrap address is taken from the Kafka CR status entry for the selected listener. When no listener matches, reconciliation reports a `NoCompatibleListener` condition listing the cluster's listeners rather than generating a config that cannot work. Fixes [#37](https://github.com/osodevops/strimzi-backup-operator/issues/37).
+
 ## 0.2.11 - 2026-07-03
 
 ### Fixed
