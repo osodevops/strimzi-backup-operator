@@ -61,6 +61,12 @@ pub struct StrimziClusterRef {
     /// secret is not `ca.crt`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ca_secret: Option<SecretKeyRef>,
+    /// Optional name of the Kafka listener to connect through. When unset,
+    /// the operator picks a listener whose authentication type matches this
+    /// resource's spec.authentication, preferring in-cluster and
+    /// TLS-encrypted listeners. Set this to override the automatic selection.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub listener: Option<String>,
 }
 
 /// Authentication configuration for connecting to Kafka

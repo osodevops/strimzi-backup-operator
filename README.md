@@ -276,6 +276,26 @@ spec:
       key: password
 ```
 
+### Listener selection
+
+Backup and restore jobs connect through the Kafka listener whose
+`authentication.type` matches the resource's `spec.authentication` — SCRAM
+credentials go to a `scram-sha-512` listener, client certificates to a `tls`
+listener, and resources without authentication use an unauthenticated
+listener. Among matching listeners, in-cluster types (`internal`,
+`cluster-ip`) are preferred over external ones, and TLS-encrypted listeners
+over plaintext. If no listener matches, reconciliation fails with a condition
+listing the cluster's listeners.
+
+To bypass the automatic selection, name a listener explicitly:
+
+```yaml
+spec:
+  strimziClusterRef:
+    name: my-cluster
+    listener: external    # connect via this listener, as declared in the Kafka CR
+```
+
 ## Helm Values
 
 | Parameter | Description | Default |

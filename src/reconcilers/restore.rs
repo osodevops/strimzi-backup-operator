@@ -137,14 +137,20 @@ pub async fn reconcile_restore(
         })?;
 
     // Step 2: Resolve target Strimzi Kafka cluster
-    let kafka_cluster =
-        match resolve_kafka_cluster(&client, &restore.spec.strimzi_cluster_ref, &namespace).await {
-            Ok(cluster) => cluster,
-            Err(e) => {
-                update_status_error(&restore_api, &name, generation, &e).await?;
-                return Err(e);
-            }
-        };
+    let kafka_cluster = match resolve_kafka_cluster(
+        &client,
+        &restore.spec.strimzi_cluster_ref,
+        &namespace,
+        restore.spec.authentication.as_ref().map(|a| &a.auth_type),
+    )
+    .await
+    {
+        Ok(cluster) => cluster,
+        Err(e) => {
+            update_status_error(&restore_api, &name, generation, &e).await?;
+            return Err(e);
+        }
+    };
 
     // Step 3: Resolve TLS certificates
     let tls_certs = match resolve_cluster_ca(

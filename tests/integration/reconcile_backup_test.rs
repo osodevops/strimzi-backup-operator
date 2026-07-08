@@ -25,6 +25,7 @@ fn scheduled_backup(suspend: bool) -> KafkaBackup {
             name: "production-cluster".to_string(),
             namespace: None,
             ca_secret: None,
+            listener: None,
         },
         authentication: None,
         topics: None,

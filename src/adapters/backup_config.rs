@@ -455,6 +455,7 @@ mod tests {
                 name: "my-cluster".to_string(),
                 namespace: None,
                 ca_secret: None,
+                listener: None,
             },
             authentication: None,
             topics: Some(TopicSelection {
