@@ -70,7 +70,7 @@ The Kafka Backup Operator creates Kubernetes Jobs (or CronJobs for scheduled bac
 ### Prerequisites
 
 - Kubernetes 1.27+
-- [Strimzi Cluster Operator](https://strimzi.io/) installed with a running Kafka cluster
+- [Strimzi Cluster Operator](https://strimzi.io/) installed with a running Kafka cluster (`kafka.strimzi.io/v1` and legacy `v1beta2` resources are supported)
 - Helm 3.x
 
 ### Install with Helm

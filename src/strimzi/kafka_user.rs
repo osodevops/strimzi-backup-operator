@@ -1,11 +1,10 @@
-use kube::{
-    api::{Api, DynamicObject, GroupVersionKind},
-    Client,
-};
+use kube::Client;
 use tracing::{debug, info};
 
 use crate::crd::common::{AuthenticationSpec, AuthenticationType};
 use crate::error::{Error, Result};
+
+use super::resource::get_namespaced_resource;
 
 /// Resolved authentication credentials
 #[derive(Clone, Debug)]
@@ -112,23 +111,15 @@ async fn resolve_kafka_user_secret(
 ) -> Result<String> {
     info!(%user_name, %namespace, "Resolving KafkaUser secret");
 
-    let api: Api<DynamicObject> = Api::namespaced_with(
-        client.clone(),
-        namespace,
-        &kube::api::ApiResource::from_gvk(&GroupVersionKind::gvk(
-            "kafka.strimzi.io",
-            "v1beta2",
-            "KafkaUser",
-        )),
-    );
-
-    let user = api.get(user_name).await.map_err(|e| match &e {
-        kube::Error::Api(ae) if ae.code == 404 => Error::KafkaUserNotFound {
-            name: user_name.to_string(),
-            namespace: namespace.to_string(),
-        },
-        _ => Error::Kube(e),
-    })?;
+    let user = get_namespaced_resource(client, namespace, "KafkaUser", user_name)
+        .await
+        .map_err(|e| match &e {
+            kube::Error::Api(ae) if ae.code == 404 => Error::KafkaUserNotFound {
+                name: user_name.to_string(),
+                namespace: namespace.to_string(),
+            },
+            _ => Error::Kube(e),
+        })?;
 
     // Check if status.secret is set
     if let Some(status) = user.data.get("status") {

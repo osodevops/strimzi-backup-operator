@@ -1,11 +1,10 @@
-use kube::{
-    api::{Api, DynamicObject, GroupVersionKind},
-    Client, ResourceExt,
-};
+use kube::{api::DynamicObject, Client, ResourceExt};
 use tracing::{debug, info};
 
 use crate::crd::common::{AuthenticationType, StrimziClusterRef};
 use crate::error::{Error, Result};
+
+use super::resource::get_namespaced_resource;
 
 /// Resolved information from a Strimzi Kafka CR
 #[derive(Clone, Debug)]
@@ -43,23 +42,15 @@ pub async fn resolve_kafka_cluster(
 
     info!(%name, %namespace, "Resolving Strimzi Kafka cluster");
 
-    let api: Api<DynamicObject> = Api::namespaced_with(
-        client.clone(),
-        namespace,
-        &kube::api::ApiResource::from_gvk(&GroupVersionKind::gvk(
-            "kafka.strimzi.io",
-            "v1beta2",
-            "Kafka",
-        )),
-    );
-
-    let kafka = api.get(name).await.map_err(|e| match &e {
-        kube::Error::Api(ae) if ae.code == 404 => Error::StrimziClusterNotFound {
-            name: name.clone(),
-            namespace: namespace.to_string(),
-        },
-        _ => Error::Kube(e),
-    })?;
+    let kafka = get_namespaced_resource(client, namespace, "Kafka", name)
+        .await
+        .map_err(|e| match &e {
+            kube::Error::Api(ae) if ae.code == 404 => Error::StrimziClusterNotFound {
+                name: name.clone(),
+                namespace: namespace.to_string(),
+            },
+            _ => Error::Kube(e),
+        })?;
 
     let connection = resolve_connection(
         &kafka,
@@ -297,7 +288,7 @@ fn extract_replicas(kafka: &DynamicObject) -> i32 {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use kube::api::ApiResource;
+    use kube::api::{ApiResource, GroupVersionKind};
     use serde_json::json;
 
     fn kafka_fixture(
