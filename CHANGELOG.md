@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.13 - 2026-07-10
+
+### Fixed
+
+- Resolve Strimzi `Kafka` and `KafkaUser` resources through the stable `kafka.strimzi.io/v1` API required by Strimzi 1.0 and later. The operator falls back to `v1beta2` on a not-found response so existing installations running older Strimzi releases remain supported. Fixes [#39](https://github.com/osodevops/strimzi-backup-operator/issues/39).
+
 ## 0.2.12 - 2026-07-08
 
 ### Added
