@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.14 - 2026-07-11
+
+### Fixed
+
+- Force server-side apply for operator-owned scheduled backup CronJobs so `KafkaBackup` changes such as `spec.resources` converge even when another field manager previously claimed parts of the generated pod template. This prevents apply conflicts from leaving the CronJob stale until it is deleted and the backup is reconciled again. Fixes [#41](https://github.com/osodevops/strimzi-backup-operator/issues/41).
+
 ## 0.2.13 - 2026-07-10
 
 ### Fixed

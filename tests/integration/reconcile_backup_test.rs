@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::BTreeMap,
+    sync::{Arc, Mutex},
+};
 
 use http::{Request, Response};
 use http_body_util::BodyExt;
@@ -16,6 +19,7 @@ use tower_test::mock;
 struct RecordedRequest {
     method: String,
     path: String,
+    query: Option<String>,
     body: serde_json::Value,
 }
 
@@ -77,6 +81,7 @@ async fn reconcile_with_mock_api(backup: KafkaBackup) -> Vec<RecordedRequest> {
             while let Some((request, send)) = handle.next_request().await {
                 let method = request.method().to_string();
                 let path = request.uri().path().to_string();
+                let query = request.uri().query().map(str::to_string);
                 let bytes = request.into_body().collect().await.unwrap().to_bytes();
                 let body: serde_json::Value = if bytes.is_empty() {
                     serde_json::Value::Null
@@ -117,10 +122,12 @@ async fn reconcile_with_mock_api(backup: KafkaBackup) -> Vec<RecordedRequest> {
                     (200, body.clone())
                 };
 
-                recorded
-                    .lock()
-                    .unwrap()
-                    .push(RecordedRequest { method, path, body });
+                recorded.lock().unwrap().push(RecordedRequest {
+                    method,
+                    path,
+                    query,
+                    body,
+                });
 
                 let response = Response::builder()
                     .status(status)
@@ -187,5 +194,37 @@ async fn test_reconcile_applies_active_cronjob_when_not_suspended() {
     assert_eq!(
         status_patch.body["status"]["conditions"][0]["reason"],
         json!("BackupScheduled")
+    );
+}
+
+#[tokio::test]
+async fn test_reconcile_force_applies_resource_updates_to_owned_cronjob() {
+    let mut backup = scheduled_backup(false);
+    backup.spec.resources = Some(ResourceRequirementsSpec {
+        requests: BTreeMap::from([
+            ("cpu".to_string(), "250m".to_string()),
+            ("memory".to_string(), "256Mi".to_string()),
+        ]),
+        limits: BTreeMap::from([
+            ("cpu".to_string(), "1".to_string()),
+            ("memory".to_string(), "1Gi".to_string()),
+        ]),
+    });
+
+    let requests = reconcile_with_mock_api(backup).await;
+    let cronjob_patch = find_cronjob_patch(&requests);
+    let resources = &cronjob_patch.body["spec"]["jobTemplate"]["spec"]["template"]["spec"]
+        ["containers"][0]["resources"];
+
+    assert_eq!(resources["requests"]["cpu"], json!("250m"));
+    assert_eq!(resources["requests"]["memory"], json!("256Mi"));
+    assert_eq!(resources["limits"]["cpu"], json!("1"));
+    assert_eq!(resources["limits"]["memory"], json!("1Gi"));
+    assert!(
+        cronjob_patch
+            .query
+            .as_deref()
+            .is_some_and(|query| query.split('&').any(|part| part == "force=true")),
+        "controller-owned CronJob fields must be force-applied so a stale field manager cannot block spec updates"
     );
 }
