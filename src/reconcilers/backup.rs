@@ -646,7 +646,11 @@ async fn apply_resource<
     let patch = serde_json::to_value(resource).map_err(Error::Serialization)?;
     api.patch(
         name,
-        &PatchParams::apply("kafka-backup-operator"),
+        // This resource is fully generated and owned by the KafkaBackup. A
+        // mutating policy or manual edit may otherwise take ownership of pod
+        // template fields and make every later reconciliation fail with a
+        // server-side apply conflict until the resource is deleted.
+        &PatchParams::apply("kafka-backup-operator").force(),
         &Patch::Apply(patch),
     )
     .await?;
