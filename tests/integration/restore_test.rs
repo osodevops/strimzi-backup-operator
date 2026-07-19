@@ -205,6 +205,28 @@ fn test_restore_logging_config_generation() {
 }
 
 #[test]
+fn test_restore_metrics_keep_alive_generation() {
+    let mut restore = sample_restore();
+    restore.spec.metrics = Some(MetricsSpec {
+        enabled: Some(true),
+        keep_alive_seconds: Some(60),
+        ..Default::default()
+    });
+
+    let yaml = build_restore_config_yaml(
+        &restore,
+        &sample_backup(),
+        &sample_cluster(),
+        &None,
+        &ResolvedAuth::None,
+    )
+    .unwrap();
+
+    assert!(yaml.contains("metrics:"));
+    assert!(yaml.contains("keep_alive_seconds: 60"));
+}
+
+#[test]
 fn test_restore_job_creation() {
     let mut restore = sample_restore();
     restore.spec.env.push(serde_json::json!({

@@ -445,9 +445,19 @@ The `PodMonitor` requires the Prometheus Operator CRDs and defaults to
 outside the Helm release namespace. Its endpoint path defaults to `/metrics`;
 if a CR customizes `spec.metrics.path`, provide a matching custom PodMonitor.
 
-One-shot job metrics exist only while the pod is running. Prometheus must scrape
-the pod before it exits; durable last-success reporting should come from the CR
-status or a service-level batch metric store rather than an operator proxy.
+For a one-shot backup or restore, keep the metrics endpoint alive long enough
+for at least one scrape. A practical minimum is twice the PodMonitor interval:
+
+```yaml
+spec:
+  metrics:
+    enabled: true
+    keepAliveSeconds: 60
+```
+
+This setting is supported by the default `kafka-backup:v0.15.10` job image.
+Durable last-success reporting should still come from the CR status or a
+service-level batch metric store rather than an operator proxy.
 
 ## Disaster Recovery Workflow
 

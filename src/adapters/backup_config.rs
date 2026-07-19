@@ -361,6 +361,11 @@ fn build_metrics_options(metrics: &crate::crd::common::MetricsSpec) -> Value {
     }
     insert_u64(
         &mut config,
+        "keep_alive_seconds",
+        metrics.keep_alive_seconds,
+    );
+    insert_u64(
+        &mut config,
         "update_interval_ms",
         metrics.update_interval_ms,
     );
@@ -559,6 +564,21 @@ mod tests {
         assert!(yaml.contains("output: stderr"));
         assert!(yaml.contains("kafka_backup: debug"));
         assert!(yaml.contains("rdkafka: info"));
+    }
+
+    #[test]
+    fn test_build_backup_config_includes_metrics_keep_alive() {
+        let mut backup = test_backup();
+        backup.spec.metrics = Some(MetricsSpec {
+            enabled: Some(true),
+            keep_alive_seconds: Some(60),
+            ..Default::default()
+        });
+
+        let yaml =
+            build_backup_config_yaml(&backup, &test_cluster(), &None, &ResolvedAuth::None).unwrap();
+        assert!(yaml.contains("metrics:"));
+        assert!(yaml.contains("keep_alive_seconds: 60"));
     }
 
     /// Issue #35: the kafka-backup binary's config parser only accepts

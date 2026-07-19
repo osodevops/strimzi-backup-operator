@@ -7,6 +7,9 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Add an opt-in Helm `metrics.jobPodMonitor` that discovers metrics-enabled `kafka-backup` Job and CronJob pods directly across namespaces. Generated backup and restore containers now declare their configured metrics port and carry a dedicated discovery label. Fixes [#43](https://github.com/osodevops/strimzi-backup-operator/issues/43).
+- Add `spec.metrics.keepAliveSeconds` for backup and restore jobs so one-shot
+  operations remain scrapeable after completion, and update the default job
+  image to the released `osodevops/kafka-backup:v0.15.10` that supports it.
 
 ### Fixed
 

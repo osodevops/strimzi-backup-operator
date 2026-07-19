@@ -222,6 +222,9 @@ pub struct MetricsSpec {
     /// Metrics endpoint path
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
+    /// Seconds to keep serving metrics after a one-shot operation completes
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub keep_alive_seconds: Option<u64>,
     /// Metrics recalculation interval in milliseconds
     #[serde(skip_serializing_if = "Option::is_none")]
     pub update_interval_ms: Option<u64>,
