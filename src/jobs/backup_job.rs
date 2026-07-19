@@ -10,8 +10,9 @@ use crate::strimzi::kafka_cr::ResolvedKafkaCluster;
 use crate::strimzi::kafka_user::ResolvedAuth;
 
 use super::templates::{
-    append_env_overrides, apply_pod_template, build_annotations, build_labels,
-    build_volumes_and_mounts, job_name_env_var, merge_template_labels,
+    add_metrics_discovery_label, append_env_overrides, apply_pod_template, build_annotations,
+    build_labels, build_volumes_and_mounts, job_metrics_ports, job_name_env_var,
+    merge_template_labels,
 };
 
 /// Build a Kubernetes Job spec for a backup operation
@@ -57,6 +58,7 @@ pub fn build_backup_job(
             "/config/backup.yaml".to_string(),
         ]),
         env: if env.is_empty() { None } else { Some(env) },
+        ports: job_metrics_ports(backup.spec.metrics.as_ref()),
         volume_mounts: Some(volume_mounts),
         resources: backup.spec.resources.as_ref().map(|r| r.to_k8s()),
         ..Default::default()
@@ -85,6 +87,9 @@ pub fn build_backup_job(
         block_owner_deletion: Some(true),
     };
 
+    let mut pod_labels = build_labels(&cr_name, &cluster.name, "backup");
+    add_metrics_discovery_label(&mut pod_labels, backup.spec.metrics.as_ref());
+
     let job = Job {
         metadata: ObjectMeta {
             name: Some(job_name.to_string()),
@@ -102,7 +107,7 @@ pub fn build_backup_job(
             backoff_limit: Some(backup.spec.backoff_limit.unwrap_or(3)),
             template: PodTemplateSpec {
                 metadata: Some(ObjectMeta {
-                    labels: Some(build_labels(&cr_name, &cluster.name, "backup")),
+                    labels: Some(pod_labels),
                     ..Default::default()
                 }),
                 spec: Some(pod_spec),

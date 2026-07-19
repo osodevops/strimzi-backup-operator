@@ -40,7 +40,12 @@ async fn main() -> anyhow::Result<()> {
                     "/metrics",
                     get(move || {
                         let state = Arc::clone(&metrics_state);
-                        async move { state.gather() }
+                        async move {
+                            (
+                                [("content-type", "text/plain; version=0.0.4; charset=utf-8")],
+                                state.gather(),
+                            )
+                        }
                     }),
                 );
 

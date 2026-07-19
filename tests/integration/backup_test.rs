@@ -202,6 +202,25 @@ fn test_backup_job_creation() {
     );
     assert_eq!(pod_spec.containers.len(), 1);
     assert_eq!(pod_spec.containers[0].name, "backup");
+    let metrics_port = pod_spec.containers[0]
+        .ports
+        .as_ref()
+        .and_then(|ports| {
+            ports
+                .iter()
+                .find(|port| port.name.as_deref() == Some("metrics"))
+        })
+        .expect("metrics-enabled backup pod should declare its scrape port");
+    assert_eq!(metrics_port.container_port, 8080);
+    assert_eq!(
+        spec.template
+            .metadata
+            .as_ref()
+            .and_then(|metadata| metadata.labels.as_ref())
+            .and_then(|labels| labels.get("kafkabackup.com/metrics"))
+            .map(String::as_str),
+        Some("enabled")
+    );
     assert!(pod_spec.containers[0]
         .args
         .as_ref()
@@ -254,6 +273,12 @@ fn test_backup_cronjob_uses_configured_service_account() {
     assert_eq!(
         pod_spec.service_account_name.as_deref(),
         Some("strimzi-backup-operator")
+    );
+    assert_eq!(
+        pod_spec.containers[0].ports.as_ref().unwrap()[0]
+            .name
+            .as_deref(),
+        Some("metrics")
     );
     assert!(pod_spec.containers[0]
         .env

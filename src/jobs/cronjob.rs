@@ -10,8 +10,8 @@ use crate::strimzi::kafka_cr::ResolvedKafkaCluster;
 use crate::strimzi::kafka_user::ResolvedAuth;
 
 use super::templates::{
-    append_env_overrides, apply_pod_template, build_labels, build_volumes_and_mounts,
-    job_name_env_var, merge_template_labels,
+    add_metrics_discovery_label, append_env_overrides, apply_pod_template, build_labels,
+    build_volumes_and_mounts, job_metrics_ports, job_name_env_var, merge_template_labels,
 };
 
 /// Build a Kubernetes CronJob for scheduled backups
@@ -59,6 +59,7 @@ pub fn build_backup_cronjob(
             "/config/backup.yaml".to_string(),
         ]),
         env: if env.is_empty() { None } else { Some(env) },
+        ports: job_metrics_ports(backup.spec.metrics.as_ref()),
         volume_mounts: Some(volume_mounts),
         resources: backup.spec.resources.as_ref().map(|r| r.to_k8s()),
         ..Default::default()
@@ -87,6 +88,9 @@ pub fn build_backup_cronjob(
         block_owner_deletion: Some(true),
     };
 
+    let mut pod_labels = labels.clone();
+    add_metrics_discovery_label(&mut pod_labels, backup.spec.metrics.as_ref());
+
     let cronjob = CronJob {
         metadata: ObjectMeta {
             name: Some(format!("{cr_name}-scheduled")),
@@ -111,7 +115,7 @@ pub fn build_backup_cronjob(
                     backoff_limit: Some(backup.spec.backoff_limit.unwrap_or(3)),
                     template: PodTemplateSpec {
                         metadata: Some(ObjectMeta {
-                            labels: Some(labels),
+                            labels: Some(pod_labels),
                             ..Default::default()
                         }),
                         spec: Some(pod_spec),

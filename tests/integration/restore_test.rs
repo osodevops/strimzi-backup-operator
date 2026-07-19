@@ -252,6 +252,25 @@ fn test_restore_job_creation() {
         Some("strimzi-backup-operator")
     );
     assert_eq!(pod_spec.containers[0].name, "restore");
+    let metrics_port = pod_spec.containers[0]
+        .ports
+        .as_ref()
+        .and_then(|ports| {
+            ports
+                .iter()
+                .find(|port| port.name.as_deref() == Some("metrics"))
+        })
+        .expect("metrics-enabled restore pod should declare its scrape port");
+    assert_eq!(metrics_port.container_port, 8080);
+    assert_eq!(
+        job.spec
+            .as_ref()
+            .and_then(|spec| spec.template.metadata.as_ref())
+            .and_then(|metadata| metadata.labels.as_ref())
+            .and_then(|labels| labels.get("kafkabackup.com/metrics"))
+            .map(String::as_str),
+        Some("enabled")
+    );
     assert!(pod_spec.containers[0]
         .args
         .as_ref()
