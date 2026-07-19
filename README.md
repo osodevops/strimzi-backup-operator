@@ -326,6 +326,7 @@ spec:
 | `azureWorkloadIdentity.clientId` | Azure Managed Identity client ID | `""` |
 | `metrics.enabled` | Enable Prometheus metrics | `true` |
 | `metrics.serviceMonitor.enabled` | Create a Prometheus ServiceMonitor | `false` |
+| `metrics.jobPodMonitor.enabled` | Create a PodMonitor for backup/restore job metrics | `false` |
 | `leaderElection.enabled` | Enable leader election for HA | `false` |
 | `resources.requests.cpu` | CPU request | `100m` |
 | `resources.requests.memory` | Memory request | `128Mi` |
@@ -401,20 +402,30 @@ spec:
 
 ## Monitoring
 
-The operator exposes Prometheus metrics on port `9090` at `/metrics`:
+There are two independent metrics endpoints:
+
+- The operator exposes controller health metrics on port `9090` at `/metrics`.
+- Each `kafka-backup` backup/restore pod exposes operation and progress metrics
+  on port `8080` by default when `spec.metrics.enabled` is not `false`.
+
+The operator does not proxy or copy job metrics. A `ServiceMonitor` only scrapes
+the operator Service; enable the chart's `PodMonitor` to discover job pods
+directly across namespaces.
+
+Operator metrics include:
 
 | Metric | Type | Description |
 |--------|------|-------------|
-| `strimzi_backup_records_total` | Counter | Total records backed up |
-| `strimzi_backup_bytes_total` | Counter | Total bytes backed up |
-| `strimzi_backup_duration_seconds` | Histogram | Backup duration |
-| `strimzi_backup_last_success_timestamp` | Gauge | Last successful backup time |
-| `strimzi_backup_last_failure_timestamp` | Gauge | Last failed backup time |
-| `strimzi_backup_storage_bytes` | Gauge | Total storage used |
-| `strimzi_backup_lag_seconds` | Gauge | Time since last backup |
-| `strimzi_restore_records_total` | Counter | Total records restored |
-| `strimzi_restore_bytes_total` | Counter | Total bytes restored |
-| `strimzi_restore_duration_seconds` | Histogram | Restore duration |
+| `strimzi_backup_operator_build_info` | Gauge | Running operator version |
+| `strimzi_backup_operator_reconciliations_total` | Counter | Reconciliations by controller and result |
+| `strimzi_backup_operator_reconciliation_duration_seconds` | Histogram | Reconciliation latency by controller and result |
+
+Job metrics include `kafka_backup_lag_records`, the low-cardinality
+`kafka_backup_lag_records_sum`, snapshot progress gauges
+`kafka_backup_snapshot_records_target` and
+`kafka_backup_snapshot_records_remaining`, `kafka_backup_records_total`,
+`kafka_backup_bytes_total`, and the runtime's storage, throughput, compression,
+error, and restore metric families.
 
 ### Prometheus ServiceMonitor
 
@@ -426,7 +437,33 @@ metrics:
     enabled: true
     interval: 30s
     scrapeTimeout: 10s
+  jobPodMonitor:
+    enabled: true
+    interval: 30s
+    scrapeTimeout: 10s
 ```
+
+The `PodMonitor` requires the Prometheus Operator CRDs and defaults to
+`namespaceSelector.any: true` because backup and restore resources may live
+outside the Helm release namespace. Its endpoint path defaults to `/metrics`;
+if a CR customizes `spec.metrics.path`, provide a matching custom PodMonitor.
+
+For a one-shot backup or restore, keep the metrics endpoint alive long enough
+for at least one scrape. A practical minimum is twice the PodMonitor interval:
+
+```yaml
+spec:
+  metrics:
+    enabled: true
+    keepAliveSeconds: 60
+    maxPartitionLabels: 100
+```
+
+This setting is supported by the default `kafka-backup:v0.15.11` job image.
+`maxPartitionLabels` limits unique topic/partition series; set it to `0` only
+when unlimited per-partition cardinality is intentional.
+Durable last-success reporting should still come from the CR status or a
+service-level batch metric store rather than an operator proxy.
 
 ## Disaster Recovery Workflow
 

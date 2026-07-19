@@ -468,6 +468,11 @@ fn build_metrics_options(metrics: &crate::crd::common::MetricsSpec) -> Value {
     }
     insert_u64(
         &mut config,
+        "keep_alive_seconds",
+        metrics.keep_alive_seconds,
+    );
+    insert_u64(
+        &mut config,
         "update_interval_ms",
         metrics.update_interval_ms,
     );

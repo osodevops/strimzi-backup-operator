@@ -205,6 +205,28 @@ fn test_restore_logging_config_generation() {
 }
 
 #[test]
+fn test_restore_metrics_keep_alive_generation() {
+    let mut restore = sample_restore();
+    restore.spec.metrics = Some(MetricsSpec {
+        enabled: Some(true),
+        keep_alive_seconds: Some(60),
+        ..Default::default()
+    });
+
+    let yaml = build_restore_config_yaml(
+        &restore,
+        &sample_backup(),
+        &sample_cluster(),
+        &None,
+        &ResolvedAuth::None,
+    )
+    .unwrap();
+
+    assert!(yaml.contains("metrics:"));
+    assert!(yaml.contains("keep_alive_seconds: 60"));
+}
+
+#[test]
 fn test_restore_job_creation() {
     let mut restore = sample_restore();
     restore.spec.env.push(serde_json::json!({
@@ -252,6 +274,25 @@ fn test_restore_job_creation() {
         Some("strimzi-backup-operator")
     );
     assert_eq!(pod_spec.containers[0].name, "restore");
+    let metrics_port = pod_spec.containers[0]
+        .ports
+        .as_ref()
+        .and_then(|ports| {
+            ports
+                .iter()
+                .find(|port| port.name.as_deref() == Some("metrics"))
+        })
+        .expect("metrics-enabled restore pod should declare its scrape port");
+    assert_eq!(metrics_port.container_port, 8080);
+    assert_eq!(
+        job.spec
+            .as_ref()
+            .and_then(|spec| spec.template.metadata.as_ref())
+            .and_then(|metadata| metadata.labels.as_ref())
+            .and_then(|labels| labels.get("kafkabackup.com/metrics"))
+            .map(String::as_str),
+        Some("enabled")
+    );
     assert!(pod_spec.containers[0]
         .args
         .as_ref()

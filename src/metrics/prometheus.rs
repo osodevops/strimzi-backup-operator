@@ -1,10 +1,15 @@
 use prometheus::{
-    Encoder, GaugeVec, HistogramOpts, HistogramVec, IntCounterVec, Opts, Registry, TextEncoder,
+    Encoder, GaugeVec, HistogramOpts, HistogramVec, IntCounterVec, IntGaugeVec, Opts, Registry,
+    TextEncoder,
 };
+use std::time::Duration;
 
 /// Prometheus metrics state for the operator
 pub struct MetricsState {
     registry: Registry,
+    pub operator_build_info: IntGaugeVec,
+    pub operator_reconciliations_total: IntCounterVec,
+    pub operator_reconciliation_duration_seconds: HistogramVec,
     pub backup_records_total: IntCounterVec,
     pub backup_bytes_total: IntCounterVec,
     pub backup_duration_seconds: HistogramVec,
@@ -26,6 +31,48 @@ impl Default for MetricsState {
 impl MetricsState {
     pub fn new() -> Self {
         let registry = Registry::new();
+
+        // Keep one always-present series so a healthy, idle operator never
+        // serves an empty successful response from /metrics.
+        let operator_build_info = IntGaugeVec::new(
+            Opts::new(
+                "strimzi_backup_operator_build_info",
+                "Build information for the Strimzi backup operator",
+            ),
+            &["version"],
+        )
+        .expect("metric creation");
+        registry
+            .register(Box::new(operator_build_info.clone()))
+            .expect("metric registration");
+        operator_build_info
+            .with_label_values(&[env!("CARGO_PKG_VERSION")])
+            .set(1);
+
+        let operator_reconciliations_total = IntCounterVec::new(
+            Opts::new(
+                "strimzi_backup_operator_reconciliations_total",
+                "Total custom resource reconciliations handled by the operator",
+            ),
+            &["controller", "result"],
+        )
+        .expect("metric creation");
+        registry
+            .register(Box::new(operator_reconciliations_total.clone()))
+            .expect("metric registration");
+
+        let operator_reconciliation_duration_seconds = HistogramVec::new(
+            HistogramOpts::new(
+                "strimzi_backup_operator_reconciliation_duration_seconds",
+                "Duration of custom resource reconciliations",
+            )
+            .buckets(vec![0.01, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 30.0]),
+            &["controller", "result"],
+        )
+        .expect("metric creation");
+        registry
+            .register(Box::new(operator_reconciliation_duration_seconds.clone()))
+            .expect("metric registration");
 
         let backup_records_total = IntCounterVec::new(
             Opts::new(
@@ -155,6 +202,9 @@ impl MetricsState {
 
         Self {
             registry,
+            operator_build_info,
+            operator_reconciliations_total,
+            operator_reconciliation_duration_seconds,
             backup_records_total,
             backup_bytes_total,
             backup_duration_seconds,
@@ -175,6 +225,18 @@ impl MetricsState {
         let mut buffer = Vec::new();
         encoder.encode(&metric_families, &mut buffer).unwrap();
         String::from_utf8(buffer).unwrap()
+    }
+
+    /// Record one controller reconciliation and its result.
+    pub fn record_reconciliation(&self, controller: &str, succeeded: bool, duration: Duration) {
+        let result = if succeeded { "success" } else { "error" };
+        let labels = &[controller, result];
+        self.operator_reconciliations_total
+            .with_label_values(labels)
+            .inc();
+        self.operator_reconciliation_duration_seconds
+            .with_label_values(labels)
+            .observe(duration.as_secs_f64());
     }
 
     /// Record a successful backup completion
@@ -239,8 +301,20 @@ mod tests {
     fn test_metrics_creation() {
         let state = MetricsState::new();
         let output = state.gather();
-        // Should contain metric definitions even without data
-        assert!(output.is_empty() || output.contains("strimzi_backup"));
+        assert!(output.contains("strimzi_backup_operator_build_info"));
+        assert!(output.contains(&format!("version=\"{}\"", env!("CARGO_PKG_VERSION"))));
+    }
+
+    #[test]
+    fn test_record_reconciliation() {
+        let state = MetricsState::new();
+        state.record_reconciliation("backup", true, Duration::from_millis(125));
+
+        let output = state.gather();
+        assert!(output.contains(
+            "strimzi_backup_operator_reconciliations_total{controller=\"backup\",result=\"success\"} 1"
+        ));
+        assert!(output.contains("strimzi_backup_operator_reconciliation_duration_seconds_count"));
     }
 
     #[test]

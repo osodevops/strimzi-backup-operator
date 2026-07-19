@@ -10,8 +10,8 @@ use crate::strimzi::kafka_cr::ResolvedKafkaCluster;
 use crate::strimzi::kafka_user::ResolvedAuth;
 
 use super::templates::{
-    append_env_overrides, apply_pod_template, build_annotations, build_labels,
-    build_volumes_and_mounts, merge_template_labels,
+    add_metrics_discovery_label, append_env_overrides, apply_pod_template, build_annotations,
+    build_labels, build_volumes_and_mounts, job_metrics_ports, merge_template_labels,
 };
 
 /// Build a Kubernetes Job spec for a restore operation
@@ -61,6 +61,7 @@ pub fn build_restore_job(
             "/config/restore.yaml".to_string(),
         ]),
         env: if env.is_empty() { None } else { Some(env) },
+        ports: job_metrics_ports(restore.spec.metrics.as_ref()),
         volume_mounts: Some(volume_mounts),
         resources: restore.spec.resources.as_ref().map(|r| r.to_k8s()),
         ..Default::default()
@@ -89,6 +90,9 @@ pub fn build_restore_job(
         block_owner_deletion: Some(true),
     };
 
+    let mut pod_labels = build_labels(&cr_name, &cluster.name, "restore");
+    add_metrics_discovery_label(&mut pod_labels, restore.spec.metrics.as_ref());
+
     let job = Job {
         metadata: ObjectMeta {
             name: Some(job_name.to_string()),
@@ -108,7 +112,7 @@ pub fn build_restore_job(
             backoff_limit: Some(restore.spec.backoff_limit.unwrap_or(0)),
             template: PodTemplateSpec {
                 metadata: Some(ObjectMeta {
-                    labels: Some(build_labels(&cr_name, &cluster.name, "restore")),
+                    labels: Some(pod_labels),
                     ..Default::default()
                 }),
                 spec: Some(pod_spec),

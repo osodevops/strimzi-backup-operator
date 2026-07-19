@@ -100,6 +100,17 @@ metrics:
     interval: 30s
     scrapeTimeout: 10s
     labels: {}
+  # Scrape kafka-backup job pods directly. This is separate from the
+  # ServiceMonitor above, which only scrapes the operator on port 9090.
+  jobPodMonitor:
+    enabled: false
+    namespace: ""
+    namespaceSelector:
+      any: true
+    interval: 30s
+    scrapeTimeout: 10s
+    path: /metrics
+    labels: {}
 
 # CRD installation
 crds:

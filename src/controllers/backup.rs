@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::Instant;
 
 use futures::StreamExt;
 use k8s_openapi::api::batch::v1::Job;
@@ -30,7 +31,11 @@ async fn reconcile(
     let namespace = backup.namespace().unwrap_or_default();
     info!(%name, %namespace, "Reconciling KafkaBackup");
 
-    reconcile_backup(backup, ctx.client.clone(), &ctx.metrics).await?;
+    let started = Instant::now();
+    let result = reconcile_backup(backup, ctx.client.clone(), &ctx.metrics).await;
+    ctx.metrics
+        .record_reconciliation("backup", result.is_ok(), started.elapsed());
+    result?;
 
     Ok(Action::requeue(Duration::from_secs(300)))
 }

@@ -1,12 +1,12 @@
 use std::collections::BTreeMap;
 
 use k8s_openapi::api::core::v1::{
-    ConfigMapVolumeSource, Container, EnvVar, EnvVarSource, KeyToPath, ObjectFieldSelector,
-    PodSpec, SecretKeySelector, SecretVolumeSource, Volume, VolumeMount,
+    ConfigMapVolumeSource, Container, ContainerPort, EnvVar, EnvVarSource, KeyToPath,
+    ObjectFieldSelector, PodSpec, SecretKeySelector, SecretVolumeSource, Volume, VolumeMount,
 };
 
 use crate::crd::common::{
-    PodTemplateSpec as CrdPodTemplate, SecretKeyRef, StorageSpec, StorageType,
+    MetricsSpec, PodTemplateSpec as CrdPodTemplate, SecretKeyRef, StorageSpec, StorageType,
 };
 use crate::strimzi::kafka_user::ResolvedAuth;
 use crate::strimzi::tls;
@@ -34,6 +34,34 @@ pub fn build_labels(cr_name: &str, cluster_name: &str, job_type: &str) -> BTreeM
     labels.insert("kafkabackup.com/type".to_string(), job_type.to_string());
     labels.insert(format!("kafkabackup.com/{job_type}"), cr_name.to_string());
     labels
+}
+
+/// Whether the kafka-backup runtime metrics server is enabled for this pod.
+/// The runtime defaults metrics to enabled when the section is omitted.
+pub fn job_metrics_enabled(metrics: Option<&MetricsSpec>) -> bool {
+    metrics.and_then(|config| config.enabled).unwrap_or(true)
+}
+
+/// Declare the named port required for Prometheus Operator PodMonitor discovery.
+pub fn job_metrics_ports(metrics: Option<&MetricsSpec>) -> Option<Vec<ContainerPort>> {
+    job_metrics_enabled(metrics).then(|| {
+        vec![ContainerPort {
+            name: Some("metrics".to_string()),
+            container_port: i32::from(metrics.and_then(|config| config.port).unwrap_or(8080)),
+            protocol: Some("TCP".to_string()),
+            ..Default::default()
+        }]
+    })
+}
+
+/// Mark only metrics-enabled job pods for the chart's PodMonitor selector.
+pub fn add_metrics_discovery_label(
+    labels: &mut BTreeMap<String, String>,
+    metrics: Option<&MetricsSpec>,
+) {
+    if job_metrics_enabled(metrics) {
+        labels.insert("kafkabackup.com/metrics".to_string(), "enabled".to_string());
+    }
 }
 
 /// Build the volumes and volume mounts for backup/restore containers.
@@ -476,5 +504,41 @@ mod tests {
         );
         let items = secret.items.as_ref().expect("secret items");
         assert_eq!(items[0].key, "ca.crt");
+    }
+
+    #[test]
+    fn metrics_discovery_uses_runtime_defaults() {
+        let mut labels = BTreeMap::new();
+        add_metrics_discovery_label(&mut labels, None);
+        assert_eq!(
+            labels.get("kafkabackup.com/metrics").map(String::as_str),
+            Some("enabled")
+        );
+
+        let ports = job_metrics_ports(None).expect("metrics default to enabled");
+        assert_eq!(ports[0].name.as_deref(), Some("metrics"));
+        assert_eq!(ports[0].container_port, 8080);
+    }
+
+    #[test]
+    fn metrics_discovery_honors_custom_port_and_disabled_state() {
+        let custom = MetricsSpec {
+            enabled: Some(true),
+            port: Some(9091),
+            ..Default::default()
+        };
+        assert_eq!(
+            job_metrics_ports(Some(&custom)).unwrap()[0].container_port,
+            9091
+        );
+
+        let disabled = MetricsSpec {
+            enabled: Some(false),
+            ..Default::default()
+        };
+        let mut labels = BTreeMap::new();
+        add_metrics_discovery_label(&mut labels, Some(&disabled));
+        assert!(labels.is_empty());
+        assert!(job_metrics_ports(Some(&disabled)).is_none());
     }
 }

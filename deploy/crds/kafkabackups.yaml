@@ -259,7 +259,7 @@ spec:
                   x-kubernetes-preserve-unknown-fields: true
                 type: array
               image:
-                description: 'Container image for the backup job (default: osodevops/kafka-backup:v0.15.6)'
+                description: 'Container image for the backup job (default: osodevops/kafka-backup:v0.15.11)'
                 nullable: true
                 type: string
               logging:
@@ -313,8 +313,14 @@ spec:
                     description: Enable the kafka-backup metrics server
                     nullable: true
                     type: boolean
+                  keepAliveSeconds:
+                    description: Seconds to keep serving metrics after a one-shot operation completes
+                    format: uint64
+                    minimum: 0.0
+                    nullable: true
+                    type: integer
                   maxPartitionLabels:
-                    description: Maximum topic/partition labels emitted by the core metrics registry
+                    description: 'Maximum unique topic/partition series emitted by the core metrics registry; set to 0 for unlimited series (default: 100)'
                     format: uint
                     minimum: 0.0
                     nullable: true

@@ -48,3 +48,8 @@ Metrics are available at:
   kubectl port-forward svc/{{ include "strimzi-backup-operator.fullname" . }}-metrics {{ .Values.service.port }}:{{ .Values.service.port }}
   curl http://localhost:{{ .Values.service.port }}/metrics
 {{- end }}
+{{- if and .Values.metrics.enabled .Values.metrics.jobPodMonitor.enabled }}
+
+Backup and restore job metrics are discovered by PodMonitor
+{{ include "strimzi-backup-operator.fullname" . }}-jobs on the named `metrics` port.
+{{- end }}
