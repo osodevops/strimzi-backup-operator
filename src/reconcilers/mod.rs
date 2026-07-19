@@ -8,6 +8,17 @@ pub const FINALIZER: &str = "kafkabackup.com/cleanup";
 pub const TRIGGER_ANNOTATION: &str = "kafkabackup.com/trigger";
 pub const TRIGGER_VALUE_NOW: &str = "now";
 
+/// Strimzi-compatible annotation for temporarily suppressing reconciliation.
+pub const PAUSE_RECONCILIATION_ANNOTATION: &str = "strimzi.io/pause-reconciliation";
+
+/// Return whether a custom resource has explicitly paused reconciliation.
+pub fn is_reconciliation_paused<K: kube::ResourceExt>(resource: &K) -> bool {
+    resource
+        .annotations()
+        .get(PAUSE_RECONCILIATION_ANNOTATION)
+        .is_some_and(|value| value.eq_ignore_ascii_case("true"))
+}
+
 /// Default backup image. Pinned to a public, current kafka-backup release so
 /// backup/restore job behavior is deterministic and the image is anonymously
 /// pullable by Kubernetes.
