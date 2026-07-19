@@ -8,6 +8,7 @@ pub const CONDITION_TYPE_BACKUP_COMPLETE: &str = "BackupComplete";
 pub const CONDITION_TYPE_RESTORE_COMPLETE: &str = "RestoreComplete";
 pub const CONDITION_TYPE_SCHEDULED: &str = "Scheduled";
 pub const CONDITION_TYPE_ERROR: &str = "Error";
+pub const CONDITION_TYPE_RECONCILIATION_PAUSED: &str = "ReconciliationPaused";
 
 /// Condition status values
 pub const STATUS_TRUE: &str = "True";
@@ -27,6 +28,7 @@ pub const REASON_RESTORE_FAILED: &str = "RestoreFailed";
 pub const REASON_CLUSTER_NOT_FOUND: &str = "ClusterNotFound";
 pub const REASON_INVALID_CONFIG: &str = "InvalidConfiguration";
 pub const REASON_SECRET_NOT_FOUND: &str = "SecretNotFound";
+pub const REASON_RECONCILIATION_PAUSED: &str = "ReconciliationPaused";
 
 /// Create a new condition
 pub fn new_condition(condition_type: &str, status: &str, reason: &str, message: &str) -> Condition {
@@ -81,6 +83,16 @@ pub fn ready(reason: &str, message: &str) -> Condition {
 /// Create a Ready=False condition
 pub fn not_ready(reason: &str, message: &str) -> Condition {
     new_condition(CONDITION_TYPE_READY, STATUS_FALSE, reason, message)
+}
+
+/// Create the condition used while the Strimzi pause annotation is enabled.
+pub fn reconciliation_paused() -> Condition {
+    new_condition(
+        CONDITION_TYPE_RECONCILIATION_PAUSED,
+        STATUS_TRUE,
+        REASON_RECONCILIATION_PAUSED,
+        "Reconciliation is paused by annotation",
+    )
 }
 
 /// Create an error condition (sets Ready=False and adds Error condition)

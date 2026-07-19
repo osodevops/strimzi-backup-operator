@@ -19,8 +19,8 @@ use crate::jobs::cronjob::build_backup_cronjob;
 use crate::jobs::job_state::{classify_jobs, job_failed, job_succeeded, should_create_backup_job};
 use crate::metrics::prometheus::MetricsState;
 use crate::reconcilers::{
-    cleanup_delete_params, job_service_account_name, FINALIZER, TRIGGER_ANNOTATION,
-    TRIGGER_VALUE_NOW,
+    cleanup_delete_params, is_reconciliation_paused, job_service_account_name, FINALIZER,
+    TRIGGER_ANNOTATION, TRIGGER_VALUE_NOW,
 };
 use crate::retention::policy::evaluate_retention;
 use crate::retention::storage::{discover_backup_history, prune_backup_ids};
@@ -43,6 +43,16 @@ pub async fn reconcile_backup(
     // Check if being deleted
     if backup.metadata.deletion_timestamp.is_some() {
         return handle_cleanup(&backup, &client, &namespace).await;
+    }
+
+    // Match Strimzi's pause semantics: a newly created paused resource is
+    // status-only and must not gain a finalizer, ConfigMap, Job, or CronJob.
+    // Deletion is intentionally handled first so an existing finalizer cannot
+    // strand a resource that is deleted while paused.
+    if is_reconciliation_paused(backup.as_ref()) {
+        update_status_reconciliation_paused(&backup_api, &backup).await?;
+        info!(%name, "Reconciliation paused by annotation");
+        return Ok(());
     }
 
     // Ensure finalizer is set
@@ -482,6 +492,25 @@ async fn update_status_running(api: &Api<KafkaBackup>, name: &str, generation: i
     status.conditions = vec![not_ready(REASON_BACKUP_RUNNING, "Backup job is running")];
     status.observed_generation = Some(generation);
     patch_status(api, name, &status).await
+}
+
+async fn update_status_reconciliation_paused(
+    api: &Api<KafkaBackup>,
+    backup: &KafkaBackup,
+) -> Result<()> {
+    let name = backup.name_any();
+    let generation = backup.metadata.generation.unwrap_or(0);
+    let mut status = backup.status.clone().unwrap_or_default();
+    let already_current =
+        is_condition_true(&status.conditions, CONDITION_TYPE_RECONCILIATION_PAUSED)
+            && status.observed_generation == Some(generation);
+    if already_current {
+        return Ok(());
+    }
+
+    status.conditions = vec![reconciliation_paused()];
+    status.observed_generation = Some(generation);
+    patch_status(api, &name, &status).await
 }
 
 async fn update_status_scheduled(

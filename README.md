@@ -172,6 +172,19 @@ spec:
 | `KafkaBackup` | `kb` | `kafkabackup.com/v1alpha1` | Defines a backup configuration with scheduling, retention, and storage |
 | `KafkaRestore` | `kr` | `kafkabackup.com/v1alpha1` | Defines a restore operation with PITR, topic mapping, and consumer group restore |
 
+### Pausing reconciliation
+
+`KafkaBackup` and `KafkaRestore` support Strimzi's standard pause annotation.
+While its value is `"true"`, the operator reports a `ReconciliationPaused`
+condition but does not add a finalizer, resolve dependencies, or create/update
+ConfigMaps, Jobs, or CronJobs. Removing the annotation or setting it to
+`"false"` resumes normal reconciliation.
+
+```bash
+kubectl annotate kafkabackup restore-source strimzi.io/pause-reconciliation="true"
+kubectl annotate kafkabackup restore-source strimzi.io/pause-reconciliation-
+```
+
 ## Storage Configuration
 
 ### Amazon S3

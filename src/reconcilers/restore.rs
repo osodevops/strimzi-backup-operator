@@ -16,7 +16,9 @@ use crate::error::{Error, Result};
 use crate::jobs::job_state::{classify_jobs, JobsState};
 use crate::jobs::restore_job::build_restore_job;
 use crate::metrics::prometheus::MetricsState;
-use crate::reconcilers::{cleanup_delete_params, job_service_account_name, FINALIZER};
+use crate::reconcilers::{
+    cleanup_delete_params, is_reconciliation_paused, job_service_account_name, FINALIZER,
+};
 use crate::status::conditions::*;
 use crate::strimzi::kafka_cr::resolve_kafka_cluster;
 use crate::strimzi::kafka_user::resolve_auth;
@@ -36,6 +38,14 @@ pub async fn reconcile_restore(
     // Check if being deleted
     if restore.metadata.deletion_timestamp.is_some() {
         return handle_cleanup(&restore, &client, &namespace).await;
+    }
+
+    // Keep deletion cleanup available while paused, but otherwise perform no
+    // resource mutations beyond reporting the Strimzi-compatible condition.
+    if is_reconciliation_paused(restore.as_ref()) {
+        update_status_reconciliation_paused(&restore_api, &restore).await?;
+        info!(%name, "Reconciliation paused by annotation");
+        return Ok(());
     }
 
     // Ensure finalizer
@@ -336,6 +346,25 @@ async fn update_status_running(api: &Api<KafkaRestore>, name: &str, generation: 
         ..Default::default()
     };
     patch_status(api, name, &status).await
+}
+
+async fn update_status_reconciliation_paused(
+    api: &Api<KafkaRestore>,
+    restore: &KafkaRestore,
+) -> Result<()> {
+    let name = restore.name_any();
+    let generation = restore.metadata.generation.unwrap_or(0);
+    let mut status = restore.status.clone().unwrap_or_default();
+    let already_current =
+        is_condition_true(&status.conditions, CONDITION_TYPE_RECONCILIATION_PAUSED)
+            && status.observed_generation == Some(generation);
+    if already_current {
+        return Ok(());
+    }
+
+    status.conditions = vec![reconciliation_paused()];
+    status.observed_generation = Some(generation);
+    patch_status(api, &name, &status).await
 }
 
 async fn update_status_completed(

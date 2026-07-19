@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.15 - 2026-07-19
+
+### Fixed
+
+- Honor `strimzi.io/pause-reconciliation: "true"` on `KafkaBackup` and `KafkaRestore` resources. Paused resources now receive a `ReconciliationPaused` status condition without creating or updating finalizers, ConfigMaps, Jobs, or CronJobs; deletion cleanup remains available for resources that were paused after reconciliation. Fixes [#44](https://github.com/osodevops/strimzi-backup-operator/issues/44).
+
 ## 0.2.14 - 2026-07-11
 
 ### Fixed
