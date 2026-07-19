@@ -420,9 +420,12 @@ Operator metrics include:
 | `strimzi_backup_operator_reconciliations_total` | Counter | Reconciliations by controller and result |
 | `strimzi_backup_operator_reconciliation_duration_seconds` | Histogram | Reconciliation latency by controller and result |
 
-Job metrics include `kafka_backup_lag_records`,
-`kafka_backup_records_total`, `kafka_backup_bytes_total`, and the runtime's
-storage, throughput, compression, error, and restore metric families.
+Job metrics include `kafka_backup_lag_records`, the low-cardinality
+`kafka_backup_lag_records_sum`, snapshot progress gauges
+`kafka_backup_snapshot_records_target` and
+`kafka_backup_snapshot_records_remaining`, `kafka_backup_records_total`,
+`kafka_backup_bytes_total`, and the runtime's storage, throughput, compression,
+error, and restore metric families.
 
 ### Prometheus ServiceMonitor
 
@@ -453,9 +456,12 @@ spec:
   metrics:
     enabled: true
     keepAliveSeconds: 60
+    maxPartitionLabels: 100
 ```
 
-This setting is supported by the default `kafka-backup:v0.15.10` job image.
+This setting is supported by the default `kafka-backup:v0.15.11` job image.
+`maxPartitionLabels` limits unique topic/partition series; set it to `0` only
+when unlimited per-partition cardinality is intentional.
 Durable last-success reporting should still come from the CR status or a
 service-level batch metric store rather than an operator proxy.
 

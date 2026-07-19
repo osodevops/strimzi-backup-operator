@@ -228,7 +228,8 @@ pub struct MetricsSpec {
     /// Metrics recalculation interval in milliseconds
     #[serde(skip_serializing_if = "Option::is_none")]
     pub update_interval_ms: Option<u64>,
-    /// Maximum topic/partition labels emitted by the core metrics registry
+    /// Maximum unique topic/partition series emitted by the core metrics registry;
+    /// set to 0 for unlimited series (default: 100)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_partition_labels: Option<usize>,
 }
