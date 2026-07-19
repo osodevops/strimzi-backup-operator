@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.16 - 2026-07-19
+
+### Added
+
+- Add an opt-in Helm `metrics.jobPodMonitor` that discovers metrics-enabled `kafka-backup` Job and CronJob pods directly across namespaces. Generated backup and restore containers now declare their configured metrics port and carry a dedicated discovery label. Fixes [#43](https://github.com/osodevops/strimzi-backup-operator/issues/43).
+
+### Fixed
+
+- Always expose `strimzi_backup_operator_build_info` from the operator's `/metrics` endpoint and record reconciliation counts and durations, so a healthy idle operator no longer returns an empty `200` response. Monitoring documentation now distinguishes the operator `ServiceMonitor` on port 9090 from job metrics on port 8080.
+
 ## 0.2.15 - 2026-07-19
 
 ### Fixed
