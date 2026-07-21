@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use super::common::{
     AuthenticationSpec, BackupHistoryEntry, Condition, ConsumerGroupSelection, KafkaConnectionSpec,
     LastBackupInfo, LoggingSpec, MetricsSpec, OffsetStorageSpec, PodTemplateSpec,
-    ResourceRequirementsSpec, SecretKeyRef, StorageSpec, StrimziClusterRef, TopicSelection,
+    ResourceRequirementsSpec, StorageSpec, StrimziClusterRef, TopicSelection,
 };
 
 /// KafkaBackup defines a backup configuration for a Strimzi-managed Kafka cluster.
@@ -58,7 +58,7 @@ pub struct KafkaBackupSpec {
     /// Storage destination configuration
     pub storage: StorageSpec,
 
-    /// Backup options (compression, encryption, parallelism)
+    /// Backup options (compression, parallelism, checkpointing)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub backup: Option<BackupOptionsSpec>,
 
@@ -110,9 +110,15 @@ pub struct BackupOptionsSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub compression_level: Option<i32>,
 
-    /// Encryption configuration
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub encryption: Option<EncryptionSpec>,
+    /// Legacy deserialization guard for CRDs installed before issue #48.
+    ///
+    /// This is deliberately absent from the generated CRD schema. Keeping the
+    /// input-only field lets the operator fail closed when an older installed
+    /// CRD still accepts the unsupported encryption configuration.
+    #[doc(hidden)]
+    #[schemars(skip)]
+    #[serde(default, skip_serializing)]
+    pub encryption: Option<UnsupportedEncryptionSpec>,
 
     /// Maximum segment file size in bytes before rotation (default: 256MB)
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -171,16 +177,11 @@ pub struct BackupOptionsSpec {
     pub consumer_group_snapshot: Option<bool>,
 }
 
-/// Encryption configuration for backups
-#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct EncryptionSpec {
-    /// Enable encryption
+#[doc(hidden)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct UnsupportedEncryptionSpec {
     #[serde(default)]
     pub enabled: bool,
-    /// Secret containing the encryption key
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub key_secret: Option<SecretKeyRef>,
 }
 
 /// Cron schedule for periodic backups
@@ -235,4 +236,24 @@ pub struct KafkaBackupStatus {
     /// Next scheduled backup time
     #[serde(skip_serializing_if = "Option::is_none")]
     pub next_scheduled_backup: Option<String>,
+}
+
+#[cfg(test)]
+mod tests {
+    use kube::CustomResourceExt;
+
+    use super::KafkaBackup;
+
+    #[test]
+    fn crd_does_not_expose_unsupported_encryption() {
+        let crd = serde_json::to_value(KafkaBackup::crd()).expect("CRD should serialize");
+        let encryption = crd.pointer(
+            "/spec/versions/0/schema/openAPIV3Schema/properties/spec/properties/backup/properties/encryption",
+        );
+
+        assert!(
+            encryption.is_none(),
+            "the OSS Strimzi operator must not expose enterprise-only encryption"
+        );
+    }
 }

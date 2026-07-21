@@ -196,7 +196,7 @@ fn build_backup_options(opts: &crate::crd::kafka_backup::BackupOptionsSpec) -> R
 
     if opts.encryption.as_ref().is_some_and(|e| e.enabled) {
         return Err(Error::InvalidConfig(
-            "backup.encryption is not supported by the current kafka-backup core config"
+            "spec.backup.encryption is an Enterprise Edition capability and is not supported by the OSS Strimzi operator"
                 .to_string(),
         ));
     }
@@ -540,6 +540,28 @@ mod tests {
         assert!(yaml.contains("mode: backup"));
         assert!(yaml.contains("bootstrap_servers:"));
         assert!(yaml.contains("orders.*"));
+    }
+
+    #[test]
+    fn test_build_backup_config_rejects_encryption_from_stale_crd() {
+        let mut backup = serde_json::to_value(test_backup()).unwrap();
+        backup["spec"]["backup"]["encryption"] = serde_json::json!({
+            "enabled": true,
+            "keySecret": {
+                "name": "backup-encryption-key",
+                "key": "aes-256-key"
+            }
+        });
+        let backup: KafkaBackup = serde_json::from_value(backup).unwrap();
+
+        let error = build_backup_config_yaml(&backup, &test_cluster(), &None, &ResolvedAuth::None)
+            .unwrap_err();
+
+        assert!(matches!(
+            error,
+            Error::InvalidConfig(message)
+                if message == "spec.backup.encryption is an Enterprise Edition capability and is not supported by the OSS Strimzi operator"
+        ));
     }
 
     #[test]
