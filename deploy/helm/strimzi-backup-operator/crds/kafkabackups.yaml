@@ -103,7 +103,7 @@ spec:
                 nullable: true
                 type: integer
               backup:
-                description: Backup options (compression, encryption, parallelism)
+                description: Backup options (compression, parallelism, checkpointing)
                 nullable: true
                 properties:
                   checkpointIntervalSecs:
@@ -129,29 +129,6 @@ spec:
                     description: Run continuously instead of one-shot
                     nullable: true
                     type: boolean
-                  encryption:
-                    description: Encryption configuration
-                    nullable: true
-                    properties:
-                      enabled:
-                        default: false
-                        description: Enable encryption
-                        type: boolean
-                      keySecret:
-                        description: Secret containing the encryption key
-                        nullable: true
-                        properties:
-                          key:
-                            description: Key within the secret
-                            type: string
-                          name:
-                            description: Secret name
-                            type: string
-                        required:
-                        - key
-                        - name
-                        type: object
-                    type: object
                   includeInternalTopics:
                     description: Include internal Kafka topics
                     nullable: true

@@ -163,12 +163,7 @@ spec:
 
   # Backup configuration
   backup:
-    compression: zstd           # none | gzip | snappy | lz4 | zstd
-    encryption:
-      enabled: false
-      keySecret:
-        name: backup-encryption-key
-        key: aes-256-key
+    compression: zstd           # none | lz4 | zstd
     segmentSize: 268435456      # 256MB — max segment file size before rotation
     parallelism: 4              # Number of concurrent partition backup threads
 
@@ -520,8 +515,7 @@ rules:
 ### 6.2 Encryption
 
 - **In-transit**: TLS for all Kafka connections, leveraging Strimzi cluster CA certificates.
-- **At-rest**: Optional AES-256-GCM encryption of backup segments before storage upload.
-- **Key management**: Encryption keys stored in Kubernetes Secrets, with future support for external KMS (AWS KMS, Azure Key Vault, HashiCorp Vault).
+- **At-rest**: Client-side backup encryption is an Enterprise Edition capability and is not exposed by this OSS operator.
 
 ### 6.3 Network Policies
 
@@ -619,7 +613,6 @@ kubectl apply -f https://operatorhub.io/install/strimzi-backup-operator.yaml
 - [ ] `KafkaBackupSchedule` CRD for multi-cluster policies
 - [ ] Consumer group offset backup and restore
 - [ ] Topic mapping during restore (rename, repartition)
-- [ ] At-rest encryption (AES-256-GCM)
 - [ ] `KafkaUser` CR integration for automatic credential discovery
 - [ ] Grafana dashboard
 - [ ] OLM / OperatorHub publication
@@ -627,6 +620,7 @@ kubectl apply -f https://operatorhub.io/install/strimzi-backup-operator.yaml
 
 ### v0.3.0 — Enterprise (8 weeks after v0.2.0)
 
+- [ ] Client-side at-rest encryption (AES-256-GCM)
 - [ ] Schema Registry backup and restore
 - [ ] External KMS integration (AWS KMS, Azure Key Vault, Vault)
 - [ ] RBAC and multi-tenancy support

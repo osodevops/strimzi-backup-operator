@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Fixed
+
+- Remove the unsupported `spec.backup.encryption` field from the OSS API and
+  generated CRDs. Client-side backup encryption is an Enterprise Edition
+  capability; exposing it here caused reconciliation to fail instead of
+  creating a backup Job. A schema-hidden compatibility guard keeps older
+  installed CRDs fail-closed rather than silently running an unencrypted
+  backup. Fixes [#48](https://github.com/osodevops/strimzi-backup-operator/issues/48).
+
 ## 0.2.16 - 2026-07-19
 
 ### Added
