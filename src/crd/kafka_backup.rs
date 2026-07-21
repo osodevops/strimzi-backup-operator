@@ -86,7 +86,7 @@ pub struct KafkaBackupSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub template: Option<PodTemplateSpec>,
 
-    /// Container image for the backup job (default: osodevops/kafka-backup:v0.15.11)
+    /// Container image for the backup job (default: osodevops/kafka-backup:v0.15.12)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub image: Option<String>,
 

@@ -459,7 +459,7 @@ spec:
     maxPartitionLabels: 100
 ```
 
-This setting is supported by the default `kafka-backup:v0.15.11` job image.
+This setting is supported by the default `kafka-backup:v0.15.12` job image.
 `maxPartitionLabels` limits unique topic/partition series; set it to `0` only
 when unlimited per-partition cardinality is intentional.
 Durable last-success reporting should still come from the CR status or a

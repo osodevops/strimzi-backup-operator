@@ -236,7 +236,7 @@ spec:
                   x-kubernetes-preserve-unknown-fields: true
                 type: array
               image:
-                description: 'Container image for the backup job (default: osodevops/kafka-backup:v0.15.11)'
+                description: 'Container image for the backup job (default: osodevops/kafka-backup:v0.15.12)'
                 nullable: true
                 type: string
               logging:
