@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.18 - 2026-07-21
+
+### Fixed
+
+- Update the default job image to `osodevops/kafka-backup:v0.15.12`, which
+  labels storage write metrics with the storage backend actually written to
+  (`s3`, `azure`, `gcs`, …) instead of a hardcoded `filesystem`, and exposes
+  counters under the documented single-`_total` names (for example
+  `kafka_backup_records_total` rather than
+  `kafka_backup_records_total_total`). Dashboards built on the doubled names
+  must move to the documented names. Fixes
+  [#50](https://github.com/osodevops/strimzi-backup-operator/issues/50).
+
 ## 0.2.17 - 2026-07-21
 
 ### Fixed
