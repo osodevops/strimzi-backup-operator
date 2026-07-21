@@ -515,7 +515,9 @@ rules:
 ### 6.2 Encryption
 
 - **In-transit**: TLS for all Kafka connections, leveraging Strimzi cluster CA certificates.
-- **At-rest**: Client-side backup encryption is an Enterprise Edition capability and is not exposed by this OSS operator.
+- **At-rest**: `spec.backup.encryption` was mistakenly exposed by this OSS
+  operator and is not supported. Encryption capabilities are available only in
+  Enterprise Edition; see the [Enterprise encryption documentation](https://github.com/osodevops/kafka-backup-enterprise-releases/blob/main/docs/encryption.md).
 
 ### 6.3 Network Policies
 

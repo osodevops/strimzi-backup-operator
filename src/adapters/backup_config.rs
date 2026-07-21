@@ -9,6 +9,9 @@ use crate::strimzi::tls::ResolvedTlsCerts;
 use super::logging_config::build_logging_config;
 use super::storage_config::build_storage_config;
 
+const ENTERPRISE_ENCRYPTION_DOCS_URL: &str =
+    "https://github.com/osodevops/kafka-backup-enterprise-releases/blob/main/docs/encryption.md";
+
 /// Build the complete kafka-backup config YAML from a KafkaBackup CR and resolved resources
 pub fn build_backup_config_yaml(
     backup: &KafkaBackup,
@@ -195,10 +198,9 @@ fn build_backup_options(opts: &crate::crd::kafka_backup::BackupOptionsSpec) -> R
     let mut config = serde_yaml::Mapping::new();
 
     if opts.encryption.as_ref().is_some_and(|e| e.enabled) {
-        return Err(Error::InvalidConfig(
-            "spec.backup.encryption is an Enterprise Edition capability and is not supported by the OSS Strimzi operator"
-                .to_string(),
-        ));
+        return Err(Error::InvalidConfig(format!(
+            "spec.backup.encryption is an Enterprise Edition capability and is not supported by the OSS Strimzi operator; see {ENTERPRISE_ENCRYPTION_DOCS_URL}"
+        )));
     }
 
     if let Some(compression) = &opts.compression {
@@ -560,7 +562,8 @@ mod tests {
         assert!(matches!(
             error,
             Error::InvalidConfig(message)
-                if message == "spec.backup.encryption is an Enterprise Edition capability and is not supported by the OSS Strimzi operator"
+                if message.contains("Enterprise Edition")
+                    && message.contains(ENTERPRISE_ENCRYPTION_DOCS_URL)
         ));
     }
 

@@ -11,7 +11,8 @@ All notable changes to this project will be documented in this file.
   capability; exposing it here caused reconciliation to fail instead of
   creating a backup Job. A schema-hidden compatibility guard keeps older
   installed CRDs fail-closed rather than silently running an unencrypted
-  backup. Fixes [#48](https://github.com/osodevops/strimzi-backup-operator/issues/48).
+  backup. See the [Enterprise encryption documentation](https://github.com/osodevops/kafka-backup-enterprise-releases/blob/main/docs/encryption.md)
+  for the supported capability. Fixes [#48](https://github.com/osodevops/strimzi-backup-operator/issues/48).
 
 ## 0.2.16 - 2026-07-19
 
