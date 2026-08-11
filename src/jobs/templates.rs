@@ -476,6 +476,13 @@ mod tests {
     }
 
     #[test]
+    fn logging_env_var_absent_without_logging_spec() {
+        // Back-compat: CRs without spec.logging must not gain a RUST_LOG
+        // env var.
+        assert!(logging_env_var(None).is_none());
+    }
+
+    #[test]
     fn logging_env_var_absent_without_level_or_modules() {
         use crate::crd::common::LoggingSpec;
         assert!(logging_env_var(None).is_none());

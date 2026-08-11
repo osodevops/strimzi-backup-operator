@@ -559,6 +559,32 @@ mod tests {
     }
 
     #[test]
+    fn test_backup_section_unchanged_without_config_passthrough() {
+        // Back-compat: a CR with no spec.backup.config must generate exactly
+        // the keys the typed fields produce — nothing added, renamed, or
+        // reordered semantically.
+        let backup = test_backup();
+        let yaml =
+            build_backup_config_yaml(&backup, &test_cluster(), &None, &ResolvedAuth::None).unwrap();
+        let parsed: serde_yaml::Value = serde_yaml::from_str(&yaml).unwrap();
+        let opts = parsed["backup"].as_mapping().unwrap();
+        let mut keys: Vec<&str> = opts.keys().map(|k| k.as_str().unwrap()).collect();
+        keys.sort_unstable();
+        assert_eq!(
+            keys,
+            vec![
+                "compression",
+                "max_concurrent_partitions",
+                "segment_max_bytes"
+            ]
+        );
+        assert_eq!(
+            opts["segment_max_bytes"],
+            serde_yaml::Value::from(268435456)
+        );
+    }
+
+    #[test]
     fn test_backup_config_passthrough_merges_native_keys() {
         let mut backup = test_backup();
         backup.spec.backup.as_mut().unwrap().config = Some(serde_json::json!({
