@@ -315,6 +315,28 @@ fn add_credentials_file_volume(
     });
 }
 
+/// Build a `RUST_LOG` env var from `spec.logging`.
+///
+/// The kafka-backup binary configures its log filter from `RUST_LOG` (or the
+/// `-v` flag); the config file's `logging:` section is not applied by current
+/// binaries. Without this env var, `spec.logging.level` had no effect on job
+/// pods. Explicit `spec.env` entries are appended after the base env, so a
+/// user-supplied `RUST_LOG` still wins.
+pub fn logging_env_var(logging: Option<&crate::crd::common::LoggingSpec>) -> Option<EnvVar> {
+    let logging = logging?;
+    let mut directives: Vec<String> = Vec::new();
+    if let Some(level) = &logging.level {
+        directives.push(level.clone());
+    }
+    for (module, level) in &logging.modules {
+        directives.push(format!("{module}={level}"));
+    }
+    if directives.is_empty() {
+        return None;
+    }
+    Some(static_env_var("RUST_LOG", &directives.join(",")))
+}
+
 fn secret_env_var(name: &str, secret_name: &str, secret_key: &str) -> EnvVar {
     EnvVar {
         name: name.to_string(),
@@ -435,6 +457,37 @@ pub fn merge_template_labels(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn logging_env_var_builds_rust_log_from_level_and_modules() {
+        use crate::crd::common::LoggingSpec;
+        let logging = LoggingSpec {
+            level: Some("debug".to_string()),
+            format: None,
+            output: None,
+            modules: [("rdkafka".to_string(), "info".to_string())]
+                .into_iter()
+                .collect(),
+            rotation: None,
+        };
+        let env = logging_env_var(Some(&logging)).expect("env var expected");
+        assert_eq!(env.name, "RUST_LOG");
+        assert_eq!(env.value.as_deref(), Some("debug,rdkafka=info"));
+    }
+
+    #[test]
+    fn logging_env_var_absent_without_level_or_modules() {
+        use crate::crd::common::LoggingSpec;
+        assert!(logging_env_var(None).is_none());
+        let logging = LoggingSpec {
+            level: None,
+            format: Some("json".to_string()),
+            output: None,
+            modules: Default::default(),
+            rotation: None,
+        };
+        assert!(logging_env_var(Some(&logging)).is_none());
+    }
     use crate::crd::common::{StorageSpec, StorageType};
 
     fn empty_storage() -> StorageSpec {
