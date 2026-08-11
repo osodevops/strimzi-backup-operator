@@ -86,7 +86,7 @@ pub struct KafkaBackupSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub template: Option<PodTemplateSpec>,
 
-    /// Container image for the backup job (default: osodevops/kafka-backup:v0.15.13)
+    /// Container image for the backup job (default: osodevops/kafka-backup:v0.16.0)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub image: Option<String>,
 
@@ -99,7 +99,7 @@ pub struct KafkaBackupSpec {
 }
 
 /// Backup-specific options
-#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BackupOptionsSpec {
     /// Compression algorithm: none, lz4, zstd
@@ -175,6 +175,16 @@ pub struct BackupOptionsSpec {
     /// Snapshot consumer group offsets after each backup cycle
     #[serde(skip_serializing_if = "Option::is_none")]
     pub consumer_group_snapshot: Option<bool>,
+
+    /// Additional backup options passed through verbatim to the
+    /// kafka-backup config's `backup:` section, using kafka-backup's
+    /// native key names (e.g. `fetch_max_bytes`, `segment_max_records`;
+    /// see https://kafkabackup.com/reference/config-yaml). Keys set here
+    /// take precedence over the typed fields above. Unknown keys are
+    /// passed along and reported as warnings by the backup job at startup.
+    #[schemars(schema_with = "super::common::free_form_object")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub config: Option<serde_json::Value>,
 }
 
 #[doc(hidden)]

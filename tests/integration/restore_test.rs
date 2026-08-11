@@ -118,6 +118,7 @@ fn sample_restore() -> KafkaRestore {
             default_replication_factor: None,
             repartitioning: Vec::new(),
             purge_topics: None,
+            config: None,
         }),
         metrics: None,
         resources: None,

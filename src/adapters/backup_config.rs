@@ -283,6 +283,21 @@ fn build_backup_options(opts: &crate::crd::kafka_backup::BackupOptionsSpec) -> R
         opts.consumer_group_snapshot,
     );
 
+    // Free-form passthrough: merge spec.backup.config over the typed fields
+    // using kafka-backup's native key names. Config keys win, matching the
+    // Strimzi `spec.kafka.config` pattern (issue #53).
+    if let Some(extra) = &opts.config {
+        let serde_json::Value::Object(entries) = extra else {
+            return Err(Error::InvalidConfig(
+                "spec.backup.config must be an object of kafka-backup option keys".to_string(),
+            ));
+        };
+        for (key, value) in entries {
+            let value = serde_yaml::to_value(value).map_err(Error::Yaml)?;
+            config.insert(Value::String(key.clone()), value);
+        }
+    }
+
     Ok(Value::Mapping(config))
 }
 
@@ -505,6 +520,7 @@ mod tests {
                 stop_at_current_offsets: None,
                 poll_interval_ms: None,
                 consumer_group_snapshot: None,
+                config: None,
             }),
             metrics: None,
             offset_storage: None,
@@ -540,6 +556,88 @@ mod tests {
         assert!(yaml.contains("mode: backup"));
         assert!(yaml.contains("bootstrap_servers:"));
         assert!(yaml.contains("orders.*"));
+    }
+
+    #[test]
+    fn test_backup_config_passthrough_merges_native_keys() {
+        let mut backup = test_backup();
+        backup.spec.backup.as_mut().unwrap().config = Some(serde_json::json!({
+            "fetch_max_bytes": 16777216,
+            "segment_max_records": 2000000
+        }));
+
+        let yaml =
+            build_backup_config_yaml(&backup, &test_cluster(), &None, &ResolvedAuth::None).unwrap();
+        let parsed: serde_yaml::Value = serde_yaml::from_str(&yaml).unwrap();
+        let opts = &parsed["backup"];
+        assert_eq!(opts["fetch_max_bytes"], serde_yaml::Value::from(16777216));
+        assert_eq!(
+            opts["segment_max_records"],
+            serde_yaml::Value::from(2000000)
+        );
+        // Typed fields still present
+        assert_eq!(opts["compression"], serde_yaml::Value::from("zstd"));
+    }
+
+    #[test]
+    fn test_backup_config_passthrough_wins_over_typed_fields() {
+        let mut backup = test_backup();
+        // Typed field segmentSize -> segment_max_bytes: 268435456 in fixture
+        backup.spec.backup.as_mut().unwrap().config = Some(serde_json::json!({
+            "segment_max_bytes": 1111,
+            "max_concurrent_partitions": 9
+        }));
+
+        let yaml =
+            build_backup_config_yaml(&backup, &test_cluster(), &None, &ResolvedAuth::None).unwrap();
+        let parsed: serde_yaml::Value = serde_yaml::from_str(&yaml).unwrap();
+        let opts = &parsed["backup"];
+        assert_eq!(opts["segment_max_bytes"], serde_yaml::Value::from(1111));
+        assert_eq!(
+            opts["max_concurrent_partitions"],
+            serde_yaml::Value::from(9)
+        );
+    }
+
+    #[test]
+    fn test_backup_config_passthrough_supports_structured_values() {
+        let mut backup = test_backup();
+        backup.spec.backup.as_mut().unwrap().config = Some(serde_json::json!({
+            "internal_topics": ["__consumer_offsets", "__transaction_state"]
+        }));
+
+        let yaml =
+            build_backup_config_yaml(&backup, &test_cluster(), &None, &ResolvedAuth::None).unwrap();
+        let parsed: serde_yaml::Value = serde_yaml::from_str(&yaml).unwrap();
+        let list = parsed["backup"]["internal_topics"].as_sequence().unwrap();
+        assert_eq!(list.len(), 2);
+    }
+
+    #[test]
+    fn test_backup_config_passthrough_rejects_non_object() {
+        let mut backup = test_backup();
+        backup.spec.backup.as_mut().unwrap().config = Some(serde_json::json!("not-a-map"));
+
+        let error = build_backup_config_yaml(&backup, &test_cluster(), &None, &ResolvedAuth::None)
+            .unwrap_err();
+        assert!(matches!(error, Error::InvalidConfig(_)));
+    }
+
+    #[test]
+    fn test_backup_config_passthrough_alone_creates_section() {
+        let mut backup = test_backup();
+        backup.spec.backup = Some(BackupOptionsSpec {
+            config: Some(serde_json::json!({"fetch_max_bytes": 123})),
+            ..BackupOptionsSpec::default()
+        });
+
+        let yaml =
+            build_backup_config_yaml(&backup, &test_cluster(), &None, &ResolvedAuth::None).unwrap();
+        let parsed: serde_yaml::Value = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(
+            parsed["backup"]["fetch_max_bytes"],
+            serde_yaml::Value::from(123)
+        );
     }
 
     #[test]

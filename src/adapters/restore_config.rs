@@ -401,6 +401,26 @@ fn build_restore_options(restore: &KafkaRestore) -> Result<Value> {
         }
     }
 
+    // Free-form passthrough: merge spec.restore.config over the typed fields
+    // using kafka-backup's native key names. Config keys win, matching the
+    // Strimzi `spec.kafka.config` pattern (issue #53).
+    if let Some(extra) = restore
+        .spec
+        .restore
+        .as_ref()
+        .and_then(|r| r.config.as_ref())
+    {
+        let serde_json::Value::Object(entries) = extra else {
+            return Err(Error::InvalidConfig(
+                "spec.restore.config must be an object of kafka-backup option keys".to_string(),
+            ));
+        };
+        for (key, value) in entries {
+            let value = serde_yaml::to_value(value).map_err(Error::Yaml)?;
+            config.insert(Value::String(key.clone()), value);
+        }
+    }
+
     Ok(Value::Mapping(config))
 }
 
@@ -497,5 +517,70 @@ fn insert_u64(config: &mut serde_yaml::Mapping, key: &str, value: Option<u64>) {
             Value::String(key.to_string()),
             Value::Number(serde_yaml::Number::from(value)),
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn cluster() -> ResolvedKafkaCluster {
+        ResolvedKafkaCluster {
+            name: "my-cluster".to_string(),
+            namespace: "kafka".to_string(),
+            bootstrap_servers: "my-cluster-kafka-bootstrap.kafka.svc:9092".to_string(),
+            replicas: 1,
+            tls_enabled: false,
+            listener_name: "plain".to_string(),
+        }
+    }
+
+    fn restore_with_config(config: serde_json::Value) -> crate::crd::kafka_restore::KafkaRestore {
+        let spec = serde_json::from_value(json!({
+            "strimziClusterRef": {"name": "my-cluster"},
+            "backupRef": {"name": "my-backup", "backupId": "backup-123"},
+            "restore": {"config": config}
+        }))
+        .unwrap();
+        crate::crd::kafka_restore::KafkaRestore::new("test-restore", spec)
+    }
+
+    fn backup() -> crate::crd::kafka_backup::KafkaBackup {
+        let spec = serde_json::from_value(json!({
+            "strimziClusterRef": {"name": "my-cluster"},
+            "storage": {"type": "filesystem", "filesystem": {"path": "/data"}}
+        }))
+        .unwrap();
+        crate::crd::kafka_backup::KafkaBackup::new("test-backup", spec)
+    }
+
+    #[test]
+    fn restore_config_passthrough_merges_and_wins() {
+        let restore = restore_with_config(json!({
+            "produce_batch_size": 500,
+            "produce_acks": 0
+        }));
+        let yaml =
+            build_restore_config_yaml(&restore, &backup(), &cluster(), &None, &ResolvedAuth::None)
+                .unwrap();
+        let parsed: serde_yaml::Value = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(
+            parsed["restore"]["produce_batch_size"],
+            serde_yaml::Value::from(500)
+        );
+        assert_eq!(
+            parsed["restore"]["produce_acks"],
+            serde_yaml::Value::from(0)
+        );
+    }
+
+    #[test]
+    fn restore_config_passthrough_rejects_non_object() {
+        let restore = restore_with_config(json!("nope"));
+        let error =
+            build_restore_config_yaml(&restore, &backup(), &cluster(), &None, &ResolvedAuth::None)
+                .unwrap_err();
+        assert!(matches!(error, Error::InvalidConfig(_)));
     }
 }

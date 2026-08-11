@@ -192,7 +192,7 @@ spec:
                   x-kubernetes-preserve-unknown-fields: true
                 type: array
               image:
-                description: 'Container image for the restore job (default: osodevops/kafka-backup:v0.15.13)'
+                description: 'Container image for the restore job (default: osodevops/kafka-backup:v0.16.0)'
                 nullable: true
                 type: string
               logging:
@@ -321,6 +321,10 @@ spec:
                     description: Checkpoint state file path
                     nullable: true
                     type: string
+                  config:
+                    description: Additional restore options passed through verbatim to the kafka-backup config's `restore:` section, using kafka-backup's native key names (e.g. `produce_batch_size`, `produce_acks`; see https://kafkabackup.com/reference/config-yaml). Keys set here take precedence over the typed fields above. Unknown keys are passed along and reported as warnings by the restore job at startup.
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
                   defaultReplicationFactor:
                     description: Replication factor for auto-created topics
                     format: int16
