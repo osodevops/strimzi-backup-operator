@@ -63,6 +63,7 @@ fn sample_backup() -> KafkaBackup {
             stop_at_current_offsets: None,
             poll_interval_ms: None,
             consumer_group_snapshot: None,
+            config: None,
         }),
         metrics: None,
         offset_storage: None,

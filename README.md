@@ -172,6 +172,32 @@ spec:
 | `KafkaBackup` | `kb` | `kafkabackup.com/v1alpha1` | Defines a backup configuration with scheduling, retention, and storage |
 | `KafkaRestore` | `kr` | `kafkabackup.com/v1alpha1` | Defines a restore operation with PITR, topic mapping, and consumer group restore |
 
+### Advanced options passthrough
+
+The typed fields under `spec.backup` / `spec.restore` cover the common
+kafka-backup options with camelCase names (for example `segmentSize` maps to
+`segment_max_bytes`). Every other option in the
+[kafka-backup config reference](https://kafkabackup.com/reference/config-yaml)
+can be set through the free-form `config` map using kafka-backup's native
+snake_case key names — following the same pattern as Strimzi's
+`spec.kafka.config`:
+
+```yaml
+spec:
+  backup:
+    compression: zstd
+    config:
+      fetch_max_bytes: 16777216       # native kafka-backup key names
+      segment_max_records: 2000000
+```
+
+Keys set in `config` are passed through verbatim to the generated job config
+and take precedence over the typed fields (so `config.segment_max_bytes` wins
+over `segmentSize`). Keys the kafka-backup binary does not recognize are
+logged as warnings at job startup (kafka-backup >= v0.16.0) instead of being
+silently ignored. `spec.restore.config` works the same way for the `restore:`
+section.
+
 ### Pausing reconciliation
 
 `KafkaBackup` and `KafkaRestore` support Strimzi's standard pause annotation.
@@ -459,7 +485,7 @@ spec:
     maxPartitionLabels: 100
 ```
 
-This setting is supported by the default `kafka-backup:v0.15.13` job image.
+This setting is supported by the default `kafka-backup:v0.16.0` job image.
 `maxPartitionLabels` limits unique topic/partition series; set it to `0` only
 when unlimited per-partition cardinality is intentional.
 Durable last-success reporting should still come from the CR status or a

@@ -2,6 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.20 - 2026-08-11
+
+### Added
+
+- `spec.backup.config` and `spec.restore.config`: free-form maps merged
+  verbatim into the generated kafka-backup config's `backup:`/`restore:`
+  sections using kafka-backup's native snake_case key names (the same pattern
+  as Strimzi's `spec.kafka.config`). Keys set in `config` take precedence over
+  the typed camelCase fields, so any option from the kafka-backup config
+  reference can be set without waiting for an operator release. Fixes
+  [#53](https://github.com/osodevops/strimzi-backup-operator/issues/53).
+
+### Changed
+
+- Update the default job image to `osodevops/kafka-backup:v0.16.0`, which adds
+  `backup.fetch_max_bytes` and `backup.segment_max_records` and warns on
+  unknown config keys at startup instead of silently ignoring them.
+
 ## 0.2.19 - 2026-08-11
 
 ### Fixed

@@ -66,6 +66,9 @@ pub fn build_restore_job(
         resources: restore.spec.resources.as_ref().map(|r| r.to_k8s()),
         ..Default::default()
     };
+    if let Some(rust_log) = super::templates::logging_env_var(restore.spec.logging.as_ref()) {
+        container.env.get_or_insert_with(Vec::new).push(rust_log);
+    }
     append_env_overrides(&mut container, &restore.spec.env);
 
     // Build pod spec

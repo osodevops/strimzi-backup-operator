@@ -121,6 +121,10 @@ spec:
                     format: int32
                     nullable: true
                     type: integer
+                  config:
+                    description: Additional backup options passed through verbatim to the kafka-backup config's `backup:` section, using kafka-backup's native key names (e.g. `fetch_max_bytes`, `segment_max_records`; see https://kafkabackup.com/reference/config-yaml). Keys set here take precedence over the typed fields above. Unknown keys are passed along and reported as warnings by the backup job at startup.
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
                   consumerGroupSnapshot:
                     description: Snapshot consumer group offsets after each backup cycle
                     nullable: true
@@ -236,7 +240,7 @@ spec:
                   x-kubernetes-preserve-unknown-fields: true
                 type: array
               image:
-                description: 'Container image for the backup job (default: osodevops/kafka-backup:v0.15.13)'
+                description: 'Container image for the backup job (default: osodevops/kafka-backup:v0.16.0)'
                 nullable: true
                 type: string
               logging:

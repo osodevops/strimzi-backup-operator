@@ -82,7 +82,7 @@ pub struct KafkaRestoreSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub template: Option<PodTemplateSpec>,
 
-    /// Container image for the restore job (default: osodevops/kafka-backup:v0.15.13)
+    /// Container image for the restore job (default: osodevops/kafka-backup:v0.16.0)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub image: Option<String>,
 
@@ -221,6 +221,16 @@ pub struct RestoreOptionsSpec {
     /// Purge target topics before restoring
     #[serde(skip_serializing_if = "Option::is_none")]
     pub purge_topics: Option<bool>,
+
+    /// Additional restore options passed through verbatim to the
+    /// kafka-backup config's `restore:` section, using kafka-backup's
+    /// native key names (e.g. `produce_batch_size`, `produce_acks`;
+    /// see https://kafkabackup.com/reference/config-yaml). Keys set here
+    /// take precedence over the typed fields above. Unknown keys are
+    /// passed along and reported as warnings by the restore job at startup.
+    #[schemars(schema_with = "super::common::free_form_object")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub config: Option<serde_json::Value>,
 }
 
 /// Mapping for source partition to target partition.

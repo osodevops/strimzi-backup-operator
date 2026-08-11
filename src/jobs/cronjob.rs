@@ -64,6 +64,9 @@ pub fn build_backup_cronjob(
         resources: backup.spec.resources.as_ref().map(|r| r.to_k8s()),
         ..Default::default()
     };
+    if let Some(rust_log) = super::templates::logging_env_var(backup.spec.logging.as_ref()) {
+        container.env.get_or_insert_with(Vec::new).push(rust_log);
+    }
     append_env_overrides(&mut container, &backup.spec.env);
 
     // Build pod spec
