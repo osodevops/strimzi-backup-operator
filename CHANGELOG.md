@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.19 - 2026-08-11
+
+### Fixed
+
+- Update the default job image to `osodevops/kafka-backup:v0.15.13`, which
+  fixes backups of compacted topics. Previously a fetch that landed on an
+  offset compacted away from the tail of a record batch made the backup loop
+  on the same batch forever (stalled progress, duplicate segments written to
+  storage), and a batch whose records were all compacted away terminated the
+  partition backup early while reporting success. Fixes
+  [#54](https://github.com/osodevops/strimzi-backup-operator/issues/54).
+
 ## 0.2.18 - 2026-07-21
 
 ### Fixed
