@@ -58,6 +58,13 @@ All notable changes to this project will be documented in this file.
   safely, so a restart is the only clean way to stop writing.
 - All shutdown paths share one SIGTERM/SIGINT handler: controllers drain
   first, then the lease is released, then the process exits.
+- Every reconciliation is bounded (120s) and every lease request is bounded
+  (half the renew deadline): an API call that never answers now fails, is
+  retried, and can no longer leave a healthy-looking leader doing nothing.
+- Logs are written through a lossy non-blocking writer. With a CPU limit the
+  runtime has a single worker thread, and a blocking write to a backed-up
+  container stdout used to freeze probes, lease renewals and reconciles
+  together (observed as 16-minute stalls under heavy host I/O).
 
 ## 0.2.22 - 2026-08-29
 

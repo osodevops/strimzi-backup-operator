@@ -37,6 +37,7 @@ struct LeaseStore {
     lease: Option<Value>,
     next_rv: u64,
     fail_put_with: Option<u16>,
+    hang_requests: bool,
     conflict_next_put: bool,
     conflict_next_post: bool,
     recorded: Vec<Recorded>,
@@ -70,6 +71,11 @@ impl MockLeaseServer {
                 } else {
                     serde_json::from_slice(&bytes).unwrap()
                 };
+                if store.lock().unwrap().hang_requests {
+                    // Never answer: the caller's request must be bounded by its own timeout.
+                    std::mem::forget(send);
+                    continue;
+                }
                 let (code, response) = {
                     let mut s = store.lock().unwrap();
                     s.recorded.push(Recorded {
@@ -165,6 +171,9 @@ impl MockLeaseServer {
     }
     fn fail_puts(&self, code: Option<u16>) {
         self.0.lock().unwrap().fail_put_with = code;
+    }
+    fn hang_requests(&self, hang: bool) {
+        self.0.lock().unwrap().hang_requests = hang;
     }
     fn conflict_next_put(&self) {
         self.0.lock().unwrap().conflict_next_put = true;
@@ -664,4 +673,36 @@ async fn dropping_the_release_sender_also_releases() {
     assert!(matches!(task.await.unwrap(), Ok(())));
     assert_eq!(*rx.borrow(), LeaderState::Follower);
     assert_eq!(server.lease()["spec"]["holderIdentity"], json!(""));
+}
+
+/// A lease request that never answers (black-holed connection, stalled API
+/// server) must not let the leader believe it still leads: each step is
+/// bounded, so the renew deadline is detected and the elector steps down.
+#[tokio::test(start_paused = true)]
+async fn run_steps_down_when_lease_requests_hang() {
+    let (server, client) = MockLeaseServer::start();
+    let (tx, rx) = watch::channel(LeaderState::Unknown);
+    let e = LeaderElector::new(client, config(), ME.to_string(), tx).with_clock(tokio_clock());
+    let (_release_tx, release_rx) = watch::channel(false);
+
+    let task = tokio::spawn(e.run(release_rx));
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert_eq!(*rx.borrow(), LeaderState::Leader);
+
+    let frozen_at = tokio::time::Instant::now();
+    server.hang_requests(true);
+    let outcome = tokio::time::timeout(Duration::from_secs(60), task)
+        .await
+        .expect("a hung request must not stall the elector past the deadline")
+        .unwrap();
+    let elapsed = frozen_at.elapsed();
+    assert!(
+        matches!(outcome, Err(LeaderError::RenewDeadlineExceeded { .. })),
+        "{outcome:?}"
+    );
+    assert!(
+        elapsed >= Duration::from_secs(10) && elapsed <= Duration::from_secs(18),
+        "stepped down after {elapsed:?}: expected renew_deadline plus at most one bounded step"
+    );
+    assert_eq!(*rx.borrow(), LeaderState::Follower);
 }

@@ -62,6 +62,13 @@ pub struct LeaderElectionConfig {
 }
 
 impl LeaderElectionConfig {
+    /// Upper bound for one acquire/renew attempt: half the renew deadline, so
+    /// a request that hangs (a black-holed connection, a stalled API server)
+    /// cannot keep a leader believing it leads past the deadline.
+    pub fn step_timeout(&self) -> Duration {
+        (self.renew_deadline / 2).max(Duration::from_millis(500))
+    }
+
     /// `Ok(None)` unless `LEADER_ELECTION_ENABLED` is set to a true value.
     /// `fallback_namespace` is used when `OPERATOR_NAMESPACE` is unset.
     pub fn from_env(fallback_namespace: &str) -> Result<Option<Self>> {
@@ -474,8 +481,14 @@ impl LeaderElector {
     }
 
     async fn step_down(mut self) -> std::result::Result<(), LeaderError> {
-        if let Err(e) = self.release().await {
-            warn!(error = %e, lease = %self.cfg.lease_name, "Failed to release leader lease; it will expire");
+        match tokio::time::timeout(self.cfg.step_timeout(), self.release()).await {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => {
+                warn!(error = %e, lease = %self.cfg.lease_name, "Failed to release leader lease; it will expire")
+            }
+            Err(_) => {
+                warn!(lease = %self.cfg.lease_name, "Releasing the leader lease timed out; it will expire")
+            }
         }
         self.publish(LeaderState::Follower);
         Ok(())
@@ -495,7 +508,18 @@ impl LeaderElector {
             }
 
             let was_leader = self.state() == LeaderState::Leader;
-            match self.try_acquire_or_renew().await {
+            let step = tokio::time::timeout(self.cfg.step_timeout(), self.try_acquire_or_renew())
+                .await
+                .unwrap_or_else(|_| {
+                    Err(kube::Error::Service(
+                        format!(
+                            "lease request did not complete within {:?}",
+                            self.cfg.step_timeout()
+                        )
+                        .into(),
+                    ))
+                });
+            match step {
                 Ok(StepOutcome::Standby) if was_leader => {
                     let holder = self
                         .observed
@@ -707,6 +731,20 @@ mod tests {
         )
         .unwrap_err();
         assert!(err.to_string().contains(LEASE_DURATION_ENV), "{err}");
+    }
+
+    #[test]
+    fn step_timeout_is_half_the_renew_deadline_with_a_floor() {
+        let mut cfg = LeaderElectionConfig {
+            lease_name: "l".into(),
+            namespace: "n".into(),
+            lease_duration: Duration::from_secs(15),
+            renew_deadline: Duration::from_secs(10),
+            retry_period: Duration::from_secs(2),
+        };
+        assert_eq!(cfg.step_timeout(), Duration::from_secs(5));
+        cfg.renew_deadline = Duration::from_millis(600);
+        assert_eq!(cfg.step_timeout(), Duration::from_millis(500));
     }
 
     #[test]

@@ -16,12 +16,18 @@ use kafka_backup_operator::{server, shutdown};
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    // Logs go through a lossy non-blocking writer: with a CPU limit the tokio
+    // runtime may have a single worker, and a blocking write to a backed-up
+    // container stdout would freeze timers, probes, lease renewals and
+    // reconciles alike. Dropping log lines under back-pressure is the lesser evil.
+    let (stdout, _log_guard) = tracing_appender::non_blocking(std::io::stdout());
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_default_env()
                 .unwrap_or_else(|_| "info,kube=info".into()),
         )
         .json()
+        .with_writer(stdout)
         .init();
 
     info!(

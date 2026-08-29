@@ -51,6 +51,7 @@ axum = "0.8"
 
 # Regex for topic/group filtering
 regex = "1"
+tracing-appender = "0.2"
 
 [dev-dependencies]
 tokio-test = "0.4"
