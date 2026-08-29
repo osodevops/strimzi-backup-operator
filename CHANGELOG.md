@@ -2,6 +2,33 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.21 - 2026-08-29
+
+### Fixed
+
+- Update the default job image to `osodevops/kafka-backup:v0.19.0`. A record
+  header whose value is **null** was archived — and restored — as an empty
+  value by every earlier job image
+  ([kafka-backup#155](https://github.com/osodevops/kafka-backup/issues/155));
+  the loss was on the backup path, so archives taken with older images store
+  such headers as empty and must be re-taken where the distinction matters.
+  Pin `spec.image` to keep an older image.
+
+### Added
+
+- `spec.restore.stripOffsetHeaders` (`restore.strip_offset_headers`,
+  kafka-backup v0.19.0+): remove the `x-original-*` / `x-source-*` headers
+  kafka-backup added at backup time so restored records match the source
+  header-for-header
+  ([kafka-backup#154](https://github.com/osodevops/kafka-backup/issues/154)).
+
+### Changed
+
+- CRD descriptions for `spec.backup.includeOffsetHeaders` (kafka-backup
+  default `true`, adds `x-original-offset` / `x-original-timestamp` to every
+  archived record) and `spec.restore.includeOriginalOffsetHeader` (default
+  `false`) now state their defaults and what they add.
+
 ## 0.2.20 - 2026-08-11
 
 ### Added

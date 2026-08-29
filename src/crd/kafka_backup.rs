@@ -86,7 +86,7 @@ pub struct KafkaBackupSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub template: Option<PodTemplateSpec>,
 
-    /// Container image for the backup job (default: osodevops/kafka-backup:v0.16.0)
+    /// Container image for the backup job (default: osodevops/kafka-backup:v0.19.0)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub image: Option<String>,
 
@@ -156,7 +156,9 @@ pub struct BackupOptionsSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sync_interval_secs: Option<u64>,
 
-    /// Include original Kafka offset headers in backup records
+    /// Add `x-original-offset` / `x-original-timestamp` headers to every archived record
+    /// (Phase 1 of the three-phase restore). kafka-backup's default is true; set false for
+    /// an archive whose records carry only their original headers.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub include_offset_headers: Option<bool>,
 

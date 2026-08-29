@@ -82,7 +82,7 @@ pub struct KafkaRestoreSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub template: Option<PodTemplateSpec>,
 
-    /// Container image for the restore job (default: osodevops/kafka-backup:v0.16.0)
+    /// Container image for the restore job (default: osodevops/kafka-backup:v0.19.0)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub image: Option<String>,
 
@@ -179,9 +179,15 @@ pub struct RestoreOptionsSpec {
     /// Dry-run mode: validate without writing records
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dry_run: Option<bool>,
-    /// Include original offsets as headers on restored records
+    /// Add `x-original-offset` / `x-original-timestamp` / `x-source-partition` headers to every
+    /// restored record (kafka-backup default: false; also implied by the header-based strategy)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub include_original_offset_header: Option<bool>,
+    /// Remove the headers kafka-backup added at backup time (`x-original-*`, `x-source-*`)
+    /// before producing, so restored records match the source header-for-header
+    /// (kafka-backup >= v0.19.0; default: false)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub strip_offset_headers: Option<bool>,
     /// Source partitions to restore
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub source_partitions: Vec<i32>,

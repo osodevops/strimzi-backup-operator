@@ -105,6 +105,7 @@ fn sample_restore() -> KafkaRestore {
             existing_topic_policy: Some(ExistingTopicPolicy::Append),
             dry_run: None,
             include_original_offset_header: None,
+            strip_offset_headers: None,
             source_partitions: Vec::new(),
             partition_mapping: Vec::new(),
             parallelism: Some(4),
