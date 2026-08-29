@@ -1,6 +1,6 @@
 [package]
 name = "kafka-backup-operator"
-version = "0.2.22"
+version = "0.2.23"
 edition = "2021"
 rust-version = "1.88"
 license = "Apache-2.0"
@@ -57,5 +57,6 @@ tokio-test = "0.4"
 assert-json-diff = "2"
 tempfile = "3"
 tower-test = "0.4"
+tower = { version = "0.5", features = ["util"] }
 http = "1"
 http-body-util = "0.1"

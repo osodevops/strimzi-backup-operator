@@ -1099,7 +1099,7 @@ dependencies = [
 
 [[package]]
 name = "kafka-backup-operator"
-version = "0.2.22"
+version = "0.2.23"
 dependencies = [
  "anyhow",
  "assert-json-diff",
@@ -1122,6 +1122,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-test",
+ "tower 0.5.3",
  "tower-test",
  "tracing",
  "tracing-subscriber",

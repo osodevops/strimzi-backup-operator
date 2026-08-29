@@ -2,6 +2,63 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.23 - 2026-08-29
+
+### Fixed
+
+- Scheduled backups no longer keep the previous operator version's job image
+  after an operator upgrade ([#62](https://github.com/osodevops/strimzi-backup-operator/issues/62)).
+  The Deployment had no update strategy, so during `helm upgrade` the old and
+  the new operator pod reconciled concurrently and the old pod's last
+  server-side apply of the CronJob (drained after SIGTERM) overwrote the new
+  pod's; nothing re-applied it for up to 5 minutes. Three layers now prevent
+  and heal this: the chart's Deployment rolls out with `maxSurge: 0` /
+  `maxUnavailable: 1` (`updateStrategy` value; the outgoing pod is deleted
+  before its replacement is created), the operator runs leader election so
+  only the lease holder reconciles — the draining pod keeps the lease until
+  its reconciles have finished — and the backup controller watches its
+  CronJobs and re-reconciles everything 5s and 60s after start-up, so any
+  out-of-band change to a scheduled CronJob is reverted within seconds
+  (this is what heals the one-off upgrade from a pre-0.2.23 operator, which
+  does not take part in the election). `updateStrategy.type: Recreate` is
+  supported for fresh installs; an existing release managed with server-side
+  apply cannot switch to it in place (Kubernetes forbids the API-defaulted
+  `rollingUpdate` block with Recreate and SSA cannot clear it) — see
+  `values.yaml`.
+
+### Added
+
+- Lease-based leader election (`coordination.k8s.io/v1`, client-go
+  semantics): the chart's `leaderElection.*` values and the
+  `LEADER_ELECTION_ENABLED` / `LEADER_ELECTION_LEASE_DURATION` /
+  `LEADER_ELECTION_RENEW_DEADLINE` / `LEADER_ELECTION_RETRY_PERIOD` /
+  `LEADER_ELECTION_LEASE_NAME` / `OPERATOR_NAMESPACE` environment variables
+  were rendered but never read; they are honoured now. Only the holder of the
+  `<release>-leader` Lease runs the controllers; other replicas stand by, so
+  `replicaCount: 2` (with `updateStrategy.type: RollingUpdate`) gives a warm
+  standby that takes over within a few seconds of the leader stopping.
+- `/readyz` reports `leader` or `standby` (200) once the replica has observed
+  the lease and `leader election pending` (503) before — a replica that cannot
+  read the lease (missing RBAC, unreachable API) is not ready, so a
+  misconfigured install fails loudly. With leader election disabled it is
+  ready immediately, as before.
+- `strimzi_backup_operator_leader{identity}` gauge (1 on the leader).
+- `scripts/e2e/` + `manifests/e2e/`: minikube-based end-to-end scenarios for
+  operator upgrades and leader election (not run in CI).
+
+### Changed
+
+- `leaderElection.enabled` now defaults to `true` (the chart renders the
+  `coordination.k8s.io/leases` ClusterRole rule accordingly). Set it to
+  `false` to keep the previous single-writer-by-convention behaviour; the
+  `maxSurge: 0` rollout and the CronJob watch still cover plain upgrades.
+- When the leader cannot renew its lease within `renewDeadline`, or finds the
+  lease held by another replica, the process exits non-zero and the kubelet
+  restarts it as a candidate — in-flight reconciles cannot be cancelled
+  safely, so a restart is the only clean way to stop writing.
+- All shutdown paths share one SIGTERM/SIGINT handler: controllers drain
+  first, then the lease is released, then the process exits.
+
 ## 0.2.22 - 2026-08-29
 
 ### Fixed
