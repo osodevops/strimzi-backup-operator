@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.22 - 2026-08-29
+
+### Fixed
+
+- Update the default job image to `osodevops/kafka-backup:v0.19.1`. The
+  `kafka_backup_snapshot_records_target` / `kafka_backup_snapshot_records_remaining`
+  gauges of a scheduled incremental backup (`spec.offsetStorage` +
+  `spec.backup.stopAtCurrentOffsets`) were sized from the whole captured offset
+  range on every run, so "remaining" started at the size of the entire archive
+  even when only a few records were new
+  ([#57](https://github.com/osodevops/strimzi-backup-operator/issues/57)).
+  Both gauges now describe the current run: `target` is the number of records
+  the run will fetch after resuming from its checkpoints, `remaining` counts
+  down from it to `0`, and a run with nothing new reports `0` / `0`. Pin
+  `spec.image` to keep an older image.
+
 ## 0.2.21 - 2026-08-29
 
 ### Fixed
