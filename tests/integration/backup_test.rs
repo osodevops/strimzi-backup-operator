@@ -550,3 +550,36 @@ fn test_backup_cronjob_custom_backoff_limit() {
         .unwrap();
     assert_eq!(job_spec.backoff_limit, Some(0));
 }
+
+/// The backup controller watches CronJobs with `.owns(...)` filtered by the
+/// `kafkabackup.com/type=backup` label (issue #62): the CronJob it builds must
+/// carry that label and a controller owner reference back to the KafkaBackup,
+/// otherwise an out-of-band change would never trigger a reconcile.
+#[test]
+fn test_backup_cronjob_carries_owner_reference_and_owned_selector_label() {
+    use kafka_backup_operator::controllers::OWNED_BACKUP_SELECTOR;
+
+    let backup = sample_backup();
+    let cluster = sample_cluster();
+    let cronjob = build_backup_cronjob(
+        &backup,
+        "daily-backup-config",
+        &cluster,
+        &ResolvedAuth::None,
+        None,
+    )
+    .expect("cronjob build");
+
+    let (key, value) = OWNED_BACKUP_SELECTOR
+        .split_once('=')
+        .expect("selector is key=value");
+    let labels = cronjob.metadata.labels.as_ref().unwrap();
+    assert_eq!(labels.get(key).map(String::as_str), Some(value));
+
+    let owner = &cronjob.metadata.owner_references.as_ref().unwrap()[0];
+    assert_eq!(owner.api_version, "kafkabackup.com/v1alpha1");
+    assert_eq!(owner.kind, "KafkaBackup");
+    assert_eq!(owner.name, "daily-backup");
+    assert_eq!(owner.uid, backup.metadata.uid.clone().unwrap());
+    assert_eq!(owner.controller, Some(true));
+}

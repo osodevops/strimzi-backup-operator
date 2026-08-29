@@ -48,6 +48,9 @@ pub enum Error {
 
     #[error("Regex error: {0}")]
     Regex(#[from] regex::Error),
+
+    #[error("Reconciliation did not finish within {0:?}; giving up so it can be retried on a fresh connection")]
+    ReconcileTimeout(std::time::Duration),
 }
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
@@ -70,6 +73,7 @@ impl Error {
             Error::Finalizer(_) => "FinalizerError",
             Error::MissingObjectKey(_) => "MissingObjectKey",
             Error::Regex(_) => "RegexError",
+            Error::ReconcileTimeout(_) => "ReconcileTimeout",
         }
     }
 }

@@ -20,6 +20,7 @@ pub struct MetricsState {
     pub restore_duration_seconds: HistogramVec,
     pub backup_storage_bytes: GaugeVec,
     pub backup_lag_seconds: GaugeVec,
+    pub operator_leader: IntGaugeVec,
 }
 
 impl Default for MetricsState {
@@ -200,6 +201,18 @@ impl MetricsState {
             .register(Box::new(backup_lag_seconds.clone()))
             .expect("metric registration");
 
+        let operator_leader = IntGaugeVec::new(
+            Opts::new(
+                "strimzi_backup_operator_leader",
+                "1 when this operator replica holds the leader lease (or leader election is disabled), 0 while it is a standby",
+            ),
+            &["identity"],
+        )
+        .expect("metric creation");
+        registry
+            .register(Box::new(operator_leader.clone()))
+            .expect("metric registration");
+
         Self {
             registry,
             operator_build_info,
@@ -215,7 +228,15 @@ impl MetricsState {
             restore_duration_seconds,
             backup_storage_bytes,
             backup_lag_seconds,
+            operator_leader,
         }
+    }
+
+    /// Publish whether this replica currently leads.
+    pub fn set_leader(&self, identity: &str, is_leader: bool) {
+        self.operator_leader
+            .with_label_values(&[identity])
+            .set(i64::from(is_leader));
     }
 
     /// Gather all metrics and encode as Prometheus text format

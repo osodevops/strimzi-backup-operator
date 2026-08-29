@@ -342,7 +342,8 @@ spec:
 | `image.repository` | Operator container image | `ghcr.io/osodevops/strimzi-backup-operator` |
 | `image.tag` | Image tag | Chart `appVersion` |
 | `image.pullPolicy` | Image pull policy | `Always` |
-| `replicaCount` | Number of operator replicas | `1` |
+| `replicaCount` | Number of operator replicas (extra replicas are warm standbys; needs `leaderElection.enabled`) | `1` |
+| `updateStrategy` | Deployment update strategy; the default (`RollingUpdate`, `maxSurge: 0`, `maxUnavailable: 1`) deletes the outgoing pod before creating its replacement | see values.yaml |
 | `watchNamespaces` | Namespaces to watch (empty = all) | `[]` |
 | `logging.level` | Rust log filter | `info,kafka_backup_operator=debug` |
 | `logging.format` | Log output format | `json` |
@@ -353,7 +354,10 @@ spec:
 | `metrics.enabled` | Enable Prometheus metrics | `true` |
 | `metrics.serviceMonitor.enabled` | Create a Prometheus ServiceMonitor | `false` |
 | `metrics.jobPodMonitor.enabled` | Create a PodMonitor for backup/restore job metrics | `false` |
-| `leaderElection.enabled` | Enable leader election for HA | `false` |
+| `leaderElection.enabled` | Only the replica holding the `<release>-leader` Lease reconciles | `true` |
+| `leaderElection.leaseDuration` | Time a standby waits without seeing a lease change before taking over | `15s` |
+| `leaderElection.renewDeadline` | Time the leader keeps retrying renewals before it exits | `10s` |
+| `leaderElection.retryPeriod` | Interval between acquire/renew attempts | `2s` |
 | `resources.requests.cpu` | CPU request | `100m` |
 | `resources.requests.memory` | Memory request | `128Mi` |
 | `resources.limits.cpu` | CPU limit | `500m` |
@@ -378,6 +382,51 @@ spec:
 The service account only needs to exist (job pods don't call the Kubernetes
 API), but it should carry any workload-identity annotations (IRSA, Azure
 Workload Identity) your storage backend requires.
+
+
+## High availability and upgrades
+
+The operator is a single writer: exactly one replica may reconcile at a time,
+otherwise two versions can race on the same child resources (issue #62 — a
+scheduled backup's CronJob kept the previous version's job image after
+`helm upgrade`). Two mechanisms enforce that:
+
+- **`updateStrategy`** (default `RollingUpdate` with `maxSurge: 0`,
+  `maxUnavailable: 1`) — the outgoing pod is deleted before its replacement
+  is created, so at most one operator pod is scheduled at any time; the
+  outgoing pod may still be draining (finishing in-flight reconciles, up to
+  `terminationGracePeriodSeconds`) while the new one starts, which is what the
+  lease below covers. `type: Recreate` additionally waits for the old pod to
+  be fully gone, but an existing release managed with server-side apply
+  (Helm 4) cannot switch to it in place — Kubernetes forbids the
+  API-defaulted `rollingUpdate` block together with `Recreate` and SSA cannot
+  clear an unowned default. Use it on fresh installs, or remove the block
+  first: `kubectl patch deploy <release> --type=json -p '[{"op":"remove","path":"/spec/strategy/rollingUpdate"}]'`.
+- **Leader election** (`leaderElection.enabled`, default `true`) — replicas
+  compete for the Lease `<release fullname>-leader` in the operator namespace
+  (`kubectl get lease -n <ns>`). Only the holder runs the controllers; the
+  others stand by. On shutdown the leader drains its reconciles first and then
+  releases the lease, so the successor takes over within about one
+  `retryPeriod`; after a crash the standby waits `leaseDuration` (15s). A
+  leader that cannot renew within `renewDeadline` exits and is restarted by
+  the kubelet as a candidate. Lease expiry is judged on the observing pod's
+  own clock, so clock skew between nodes does not cause premature takeovers.
+
+For a warm standby run `replicaCount: 2` (optionally with `maxSurge: 1` so
+a rollout keeps two pods up): the incoming pod becomes `Ready` as a standby
+(`/readyz` returns `standby`) and acquires the lease as soon as the outgoing
+leader releases it. `/readyz` returns `503 leader election pending` until a replica
+has observed the lease at least once, so an install whose ServiceAccount lacks
+the `coordination.k8s.io/leases` rule (rendered by the chart when leader
+election is enabled) fails `helm upgrade --wait` instead of running silently.
+Set `leaderElection.enabled=false` to opt out; the `maxSurge: 0` rollout and
+the CronJob watch below still cover plain upgrades. The gauge `strimzi_backup_operator_leader{identity}`
+is `1` on the leader.
+
+On start-up (and on every out-of-band change to an owned CronJob) the backup
+controller re-applies the desired CronJob, and it reconciles every resource
+again 5s and 60s after start, so a stale CronJob is corrected within seconds
+even if the mechanisms above are disabled.
 
 ## Logging
 

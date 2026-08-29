@@ -1,0 +1,35 @@
+# Scheduled incremental backup used by the #62 e2e scenarios.
+# Deliberately has NO spec.image: the job image must come from the operator's
+# compiled-in default so an operator upgrade is observable on the CronJob.
+apiVersion: kafkabackup.com/v1alpha1
+kind: KafkaBackup
+metadata:
+  name: incr
+  namespace: kafka
+spec:
+  strimziClusterRef:
+    name: my-cluster
+  authentication:
+    type: scram-sha-512
+    kafkaUserRef:
+      name: kafka-backup
+  storage:
+    type: s3
+    s3:
+      bucket: kafka-backups
+      region: us-east-1
+      endpoint: http://minio.minio.svc.cluster.local:9000
+      forcePathStyle: true
+      allowHttp: true
+      accessKeySecret:
+        name: minio-credentials
+        key: access-key-id
+      secretKeySecret:
+        name: minio-credentials
+        key: secret-access-key
+  backup:
+    stopAtCurrentOffsets: true
+  offsetStorage:
+    backend: sqlite
+  schedule:
+    cron: "0 0 31 2 *"   # never fires; runs are triggered with `kubectl create job --from=cronjob/incr-scheduled`

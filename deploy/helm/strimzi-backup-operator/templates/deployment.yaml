@@ -6,6 +6,19 @@ metadata:
     {{- include "strimzi-backup-operator.labels" . | nindent 4 }}
 spec:
   replicas: {{ .Values.replicaCount }}
+  strategy:
+    type: {{ .Values.updateStrategy.type | default "Recreate" }}
+    {{- if eq (.Values.updateStrategy.type | default "Recreate") "RollingUpdate" }}
+    {{- with .Values.updateStrategy.rollingUpdate }}
+    rollingUpdate:
+      {{- toYaml . | nindent 6 }}
+    {{- end }}
+    {{- else }}
+    # Explicit null clears the API-defaulted rollingUpdate block (forbidden with
+    # Recreate) for releases managed with client-side apply; server-side apply
+    # cannot remove an unowned default - see values.yaml.
+    rollingUpdate: null
+    {{- end }}
   selector:
     matchLabels:
       {{- include "strimzi-backup-operator.selectorLabels" . | nindent 6 }}
@@ -66,6 +79,8 @@ spec:
               value: {{ .Values.leaderElection.renewDeadline | quote }}
             - name: LEADER_ELECTION_RETRY_PERIOD
               value: {{ .Values.leaderElection.retryPeriod | quote }}
+            - name: LEADER_ELECTION_LEASE_NAME
+              value: {{ printf "%s-leader" (include "strimzi-backup-operator.fullname" .) | quote }}
             {{- end }}
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
