@@ -82,6 +82,12 @@ fn never_shutdown() -> Shutdown {
 /// reconciler needs (Kafka CR, secrets, jobs, SSA patches, status) is answered
 /// like in `reconcile_backup_test`.
 fn start_mock(items: Vec<Value>) -> (Client, Arc<Mutex<Vec<Recorded>>>) {
+    start_mock_with(items, false)
+}
+
+/// `hang_kafka_get` holds the Strimzi Kafka CR GET open forever, simulating
+/// an API request that never answers.
+fn start_mock_with(items: Vec<Value>, hang_kafka_get: bool) -> (Client, Arc<Mutex<Vec<Recorded>>>) {
     let (service, mut handle) = mock::pair::<Request<Body>, Response<Body>>();
     let recorded = Arc::new(Mutex::new(Vec::new()));
     let log = Arc::clone(&recorded);
@@ -103,7 +109,7 @@ fn start_mock(items: Vec<Value>) -> (Client, Arc<Mutex<Vec<Recorded>>>) {
                 query: query.clone(),
             });
 
-            if query.contains("watch=true") {
+            if query.contains("watch=true") || (hang_kafka_get && path.contains("/kafkas/")) {
                 held.push(send);
                 continue;
             }
@@ -178,6 +184,7 @@ async fn backup_controller_watches_owned_jobs_and_cronjobs_by_label() {
         never_shutdown(),
         RunOptions {
             startup_resync_delays: &DELAYS,
+            ..RunOptions::default()
         },
     ));
     tokio::time::sleep(Duration::from_millis(700)).await;
@@ -205,6 +212,7 @@ async fn restore_controller_watches_owned_jobs_by_label() {
         never_shutdown(),
         RunOptions {
             startup_resync_delays: &DELAYS,
+            ..RunOptions::default()
         },
     ));
     tokio::time::sleep(Duration::from_millis(700)).await;
@@ -232,6 +240,7 @@ async fn backup_controller_reconciles_everything_again_after_the_startup_delay()
         never_shutdown(),
         RunOptions {
             startup_resync_delays: &DELAYS,
+            ..RunOptions::default()
         },
     ));
     tokio::time::sleep(Duration::from_millis(1500)).await;
@@ -255,6 +264,7 @@ async fn without_a_startup_tick_the_cronjob_is_applied_once() {
         never_shutdown(),
         RunOptions {
             startup_resync_delays: &DELAYS,
+            ..RunOptions::default()
         },
     ));
     tokio::time::sleep(Duration::from_millis(1500)).await;
@@ -262,4 +272,46 @@ async fn without_a_startup_tick_the_cronjob_is_applied_once() {
 
     let recorded = recorded.lock().unwrap().clone();
     assert_eq!(cronjob_patches(&recorded), 1);
+}
+
+/// A reconcile whose API call never answers must not pin the object forever:
+/// it times out, is recorded as an error and can be retried (issue #62 —
+/// under leader election a hung reconcile would otherwise leave a
+/// healthy-looking leader that does nothing).
+#[tokio::test]
+async fn a_hung_reconcile_times_out_and_is_recorded_as_an_error() {
+    let (client, recorded) = start_mock_with(vec![scheduled_backup()], true);
+    let metrics = Arc::new(MetricsState::new());
+    static DELAYS: [Duration; 0] = [];
+    let task = tokio::spawn(backup::run_with(
+        client,
+        Arc::clone(&metrics),
+        never_shutdown(),
+        RunOptions {
+            startup_resync_delays: &DELAYS,
+            reconcile_timeout: Duration::from_millis(300),
+        },
+    ));
+    tokio::time::sleep(Duration::from_millis(1500)).await;
+    task.abort();
+
+    let exposition = metrics.gather();
+    assert!(
+        exposition.contains(
+            "strimzi_backup_operator_reconciliations_total{controller=\"backup\",result=\"error\"} 1"
+        ),
+        "the timed-out reconcile must be counted as an error:\n{exposition}"
+    );
+    let recorded = recorded.lock().unwrap().clone();
+    assert!(
+        recorded
+            .iter()
+            .any(|r| r.method == "GET" && r.path.contains("/kafkas/")),
+        "the reconcile reached the Kafka CR lookup"
+    );
+    assert_eq!(
+        cronjob_patches(&recorded),
+        0,
+        "nothing past the hung call ran"
+    );
 }

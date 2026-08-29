@@ -18,17 +18,27 @@ pub const OWNED_RESTORE_SELECTOR: &str = "kafkabackup.com/type=restore";
 /// still draining during an upgrade (issue #62).
 pub const STARTUP_RESYNC_DELAYS: [Duration; 2] = [Duration::from_secs(5), Duration::from_secs(55)];
 
+/// Upper bound for one reconciliation. A Kubernetes API call that never
+/// answers (kube's own read timeout is 295s) would otherwise pin the object —
+/// and, under leader election, leave a healthy-looking leader that does
+/// nothing. A timed-out reconcile is an error: it is retried by the error
+/// policy on a fresh request.
+pub const RECONCILE_TIMEOUT: Duration = Duration::from_secs(120);
+
 /// Tunables for a controller run, so tests can shorten the timers.
 #[derive(Debug, Clone, Copy)]
 pub struct RunOptions {
     /// Post-start-up resync ticks, cumulative delays. Empty disables them.
     pub startup_resync_delays: &'static [Duration],
+    /// See [`RECONCILE_TIMEOUT`].
+    pub reconcile_timeout: Duration,
 }
 
 impl Default for RunOptions {
     fn default() -> Self {
         Self {
             startup_resync_delays: &STARTUP_RESYNC_DELAYS,
+            reconcile_timeout: RECONCILE_TIMEOUT,
         }
     }
 }
@@ -67,5 +77,9 @@ mod tests {
         );
         let total: Duration = STARTUP_RESYNC_DELAYS.iter().sum();
         assert_eq!(total, Duration::from_secs(60));
+        assert_eq!(
+            RunOptions::default().reconcile_timeout,
+            Duration::from_secs(120)
+        );
     }
 }

@@ -22,6 +22,7 @@ use crate::shutdown::Shutdown;
 struct Context {
     client: Client,
     metrics: Arc<MetricsState>,
+    reconcile_timeout: Duration,
 }
 
 #[instrument(skip(ctx))]
@@ -34,7 +35,15 @@ async fn reconcile(
     info!(%name, %namespace, "Reconciling KafkaRestore");
 
     let started = Instant::now();
-    let result = reconcile_restore(restore, ctx.client.clone(), &ctx.metrics).await;
+    let result = match tokio::time::timeout(
+        ctx.reconcile_timeout,
+        reconcile_restore(restore, ctx.client.clone(), &ctx.metrics),
+    )
+    .await
+    {
+        Ok(result) => result,
+        Err(_) => Err(crate::error::Error::ReconcileTimeout(ctx.reconcile_timeout)),
+    };
     ctx.metrics
         .record_reconciliation("restore", result.is_ok(), started.elapsed());
     result?;
@@ -68,6 +77,7 @@ pub async fn run_with(
     let context = Arc::new(Context {
         client: client.clone(),
         metrics,
+        reconcile_timeout: options.reconcile_timeout,
     });
 
     info!("Starting KafkaRestore controller");
