@@ -1,7 +1,23 @@
 # Default values for strimzi-backup-operator
 
-# Number of replicas
+# Number of replicas. More than one only makes sense with leaderElection
+# enabled: the extra replicas are warm standbys that take over the lease when
+# the leader stops.
 replicaCount: 1
+
+# Deployment update strategy. The default never schedules two operator pods
+# at once (maxSurge 0 / maxUnavailable 1): the outgoing pod is deleted before
+# its replacement is created, and while it drains the leader lease keeps it the
+# only writer (issue #62). `type: Recreate` additionally waits for the old pod
+# to be fully gone, but an existing release managed with server-side apply
+# (Helm 4) cannot switch to it in place: the API-defaulted rollingUpdate block
+# is forbidden with Recreate. Use Recreate on fresh installs, or first run
+# `kubectl patch deploy <release> --type=json -p '[{"op":"remove","path":"/spec/strategy/rollingUpdate"}]'`.
+updateStrategy:
+  type: RollingUpdate
+  rollingUpdate:
+    maxSurge: 0
+    maxUnavailable: 1
 
 image:
   repository: ghcr.io/osodevops/strimzi-backup-operator
@@ -119,9 +135,14 @@ crds:
   # Keep CRDs on chart uninstall
   keep: true
 
-# Leader election configuration (for HA deployments)
+# Leader election. Only the replica holding the Lease
+# `<release fullname>-leader` (coordination.k8s.io, in the operator namespace)
+# runs the controllers; the others stand by and report `standby` on /readyz.
+# Keeps a draining pod from racing its successor on node drain / eviction /
+# preemption, where Recreate cannot help. Requires the leases RBAC rule the
+# chart renders when enabled; set to false to opt out.
 leaderElection:
-  enabled: false
-  leaseDuration: 15s
-  renewDeadline: 10s
-  retryPeriod: 2s
+  enabled: true
+  leaseDuration: 15s   # how long a standby waits without seeing a change before taking over
+  renewDeadline: 10s   # how long the leader keeps retrying renewals before it exits (and restarts)
+  retryPeriod: 2s      # interval between acquire/renew attempts; must be < renewDeadline < leaseDuration

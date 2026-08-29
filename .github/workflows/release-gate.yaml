@@ -93,7 +93,9 @@ jobs:
           cmp deploy/crds/kafkarestores.yaml deploy/helm/strimzi-backup-operator/crds/kafkarestores.yaml
 
       - name: Lint Helm chart
-        run: helm lint deploy/helm/strimzi-backup-operator
+        run: |
+          helm lint deploy/helm/strimzi-backup-operator
+          helm lint deploy/helm/strimzi-backup-operator --values deploy/helm/strimzi-backup-operator/ci/leader-election-values.yaml
 
       - name: Render Helm chart with defaults
         run: |
@@ -103,6 +105,22 @@ jobs:
           grep -q 'name: BACKUP_JOB_SERVICE_ACCOUNT' /tmp/strimzi-backup-operator-default.yaml
           grep -q 'value: "strimzi-backup-operator"' /tmp/strimzi-backup-operator-default.yaml
           grep -q "image: ghcr.io/osodevops/strimzi-backup-operator:${APP_VERSION}" /tmp/strimzi-backup-operator-default.yaml
+          # issue #62: no two operator pods may reconcile concurrently
+          grep -q 'type: RollingUpdate' /tmp/strimzi-backup-operator-default.yaml
+          grep -q 'maxSurge: 0' /tmp/strimzi-backup-operator-default.yaml
+          grep -q 'maxUnavailable: 1' /tmp/strimzi-backup-operator-default.yaml
+          grep -q 'name: LEADER_ELECTION_ENABLED' /tmp/strimzi-backup-operator-default.yaml
+          grep -q 'name: LEADER_ELECTION_LEASE_NAME' /tmp/strimzi-backup-operator-default.yaml
+          grep -q 'value: "strimzi-backup-operator-leader"' /tmp/strimzi-backup-operator-default.yaml
+          grep -q 'value: "15s"' /tmp/strimzi-backup-operator-default.yaml
+          grep -q 'coordination.k8s.io' /tmp/strimzi-backup-operator-default.yaml
+          helm template strimzi-backup-operator deploy/helm/strimzi-backup-operator \
+            --set updateStrategy.type=Recreate --set leaderElection.enabled=false \
+            | tee /tmp/strimzi-backup-operator-optout.yaml
+          grep -q 'type: Recreate' /tmp/strimzi-backup-operator-optout.yaml
+          ! grep -q 'maxSurge' /tmp/strimzi-backup-operator-optout.yaml
+          ! grep -q 'LEADER_ELECTION_ENABLED' /tmp/strimzi-backup-operator-optout.yaml
+          ! grep -q 'coordination.k8s.io' /tmp/strimzi-backup-operator-optout.yaml
 
       - name: Render Helm chart with backup job service account override
         run: |

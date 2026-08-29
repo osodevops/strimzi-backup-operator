@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::time::Instant;
 
 use futures::StreamExt;
-use k8s_openapi::api::batch::v1::Job;
+use k8s_openapi::api::batch::v1::{CronJob, Job};
 use kube::{
     runtime::{
         controller::{Action, Controller},
@@ -13,9 +13,11 @@ use kube::{
 use tokio::time::Duration;
 use tracing::{error, info, instrument};
 
+use crate::controllers::{startup_resync_ticks, RunOptions, OWNED_BACKUP_SELECTOR};
 use crate::crd::KafkaBackup;
 use crate::metrics::prometheus::MetricsState;
 use crate::reconcilers::backup::reconcile_backup;
+use crate::shutdown::Shutdown;
 
 struct Context {
     client: Client,
@@ -50,9 +52,19 @@ fn error_policy(
     Action::requeue(Duration::from_secs(30))
 }
 
-pub async fn run(client: Client, metrics: Arc<MetricsState>) {
+pub async fn run(client: Client, metrics: Arc<MetricsState>, shutdown: Shutdown) {
+    run_with(client, metrics, shutdown, RunOptions::default()).await
+}
+
+pub async fn run_with(
+    client: Client,
+    metrics: Arc<MetricsState>,
+    shutdown: Shutdown,
+    options: RunOptions,
+) {
     let backups = Api::<KafkaBackup>::all(client.clone());
     let jobs = Api::<Job>::all(client.clone());
+    let cronjobs = Api::<CronJob>::all(client.clone());
 
     let context = Arc::new(Context {
         client: client.clone(),
@@ -64,11 +76,14 @@ pub async fn run(client: Client, metrics: Arc<MetricsState>) {
     Controller::new(backups, Config::default().any_semantic())
         // Watch owned Jobs so completion/failure updates the KafkaBackup
         // status immediately instead of waiting for the periodic requeue.
-        .owns(
-            jobs,
-            Config::default().labels("kafkabackup.com/type=backup"),
-        )
-        .shutdown_on_signal()
+        .owns(jobs, Config::default().labels(OWNED_BACKUP_SELECTOR))
+        // Watch owned CronJobs so an out-of-band change to the scheduled
+        // backup — a manual edit, or the last apply of an operator pod that
+        // was still draining during an upgrade — is reverted immediately
+        // instead of on the next periodic requeue (issue #62).
+        .owns(cronjobs, Config::default().labels(OWNED_BACKUP_SELECTOR))
+        .reconcile_all_on(startup_resync_ticks(options.startup_resync_delays))
+        .graceful_shutdown_on(shutdown)
         .run(reconcile, error_policy, context)
         .for_each(|res| async move {
             match res {

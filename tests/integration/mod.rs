@@ -1,6 +1,9 @@
 mod backup_test;
 mod cleanup_test;
+mod controller_wiring_test;
+mod health_endpoints_test;
 mod job_state_test;
+mod leader_election_test;
 mod reconcile_backup_test;
 mod reconcile_pause_test;
 mod restore_test;

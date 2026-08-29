@@ -13,9 +13,11 @@ use kube::{
 use tokio::time::Duration;
 use tracing::{error, info, instrument};
 
+use crate::controllers::{startup_resync_ticks, RunOptions, OWNED_RESTORE_SELECTOR};
 use crate::crd::KafkaRestore;
 use crate::metrics::prometheus::MetricsState;
 use crate::reconcilers::restore::reconcile_restore;
+use crate::shutdown::Shutdown;
 
 struct Context {
     client: Client,
@@ -50,7 +52,16 @@ fn error_policy(
     Action::requeue(Duration::from_secs(30))
 }
 
-pub async fn run(client: Client, metrics: Arc<MetricsState>) {
+pub async fn run(client: Client, metrics: Arc<MetricsState>, shutdown: Shutdown) {
+    run_with(client, metrics, shutdown, RunOptions::default()).await
+}
+
+pub async fn run_with(
+    client: Client,
+    metrics: Arc<MetricsState>,
+    shutdown: Shutdown,
+    options: RunOptions,
+) {
     let restores = Api::<KafkaRestore>::all(client.clone());
     let jobs = Api::<Job>::all(client.clone());
 
@@ -64,11 +75,9 @@ pub async fn run(client: Client, metrics: Arc<MetricsState>) {
     Controller::new(restores, Config::default().any_semantic())
         // Watch owned Jobs so completion/failure updates the KafkaRestore
         // status immediately instead of waiting for the periodic requeue.
-        .owns(
-            jobs,
-            Config::default().labels("kafkabackup.com/type=restore"),
-        )
-        .shutdown_on_signal()
+        .owns(jobs, Config::default().labels(OWNED_RESTORE_SELECTOR))
+        .reconcile_all_on(startup_resync_ticks(options.startup_resync_delays))
+        .graceful_shutdown_on(shutdown)
         .run(reconcile, error_policy, context)
         .for_each(|res| async move {
             match res {

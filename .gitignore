@@ -28,3 +28,6 @@ AGENTS.md
 
 # Docker
 .dockerignore
+
+# Local e2e artefacts (scripts/e2e)
+.e2e/

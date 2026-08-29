@@ -1,0 +1,15 @@
+# Values override for chart-testing (ct install) in CI: leader election on,
+# lightweight image so the chart renders the leases RBAC path without the
+# operator image having to exist yet.
+image:
+  repository: busybox
+  tag: latest
+  pullPolicy: IfNotPresent
+
+leaderElection:
+  enabled: true
+
+commandOverride:
+  - sh
+  - -c
+  - "echo 'chart-testing mode' && sleep 30"
