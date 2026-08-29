@@ -220,6 +220,11 @@ fn build_restore_options(restore: &KafkaRestore) -> Result<Value> {
             "include_original_offset_header",
             opts.include_original_offset_header,
         );
+        insert_bool(
+            &mut config,
+            "strip_offset_headers",
+            opts.strip_offset_headers,
+        );
         if !opts.source_partitions.is_empty() {
             config.insert(
                 Value::String("source_partitions".to_string()),
@@ -573,6 +578,39 @@ mod tests {
             parsed["restore"]["produce_acks"],
             serde_yaml::Value::from(0)
         );
+    }
+
+    /// `stripOffsetHeaders` is a typed field that lands in the job config as
+    /// `restore.strip_offset_headers`; unset, it is omitted so the kafka-backup
+    /// default (false) applies.
+    #[test]
+    fn restore_strip_offset_headers_is_passed_through_when_set() {
+        let spec = serde_json::from_value(json!({
+            "strimziClusterRef": {"name": "my-cluster"},
+            "backupRef": {"name": "my-backup", "backupId": "backup-123"},
+            "restore": {"stripOffsetHeaders": true, "includeOriginalOffsetHeader": false}
+        }))
+        .unwrap();
+        let restore = crate::crd::kafka_restore::KafkaRestore::new("test-restore", spec);
+        let yaml =
+            build_restore_config_yaml(&restore, &backup(), &cluster(), &None, &ResolvedAuth::None)
+                .unwrap();
+        let parsed: serde_yaml::Value = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(
+            parsed["restore"]["strip_offset_headers"],
+            serde_yaml::Value::from(true)
+        );
+        assert_eq!(
+            parsed["restore"]["include_original_offset_header"],
+            serde_yaml::Value::from(false)
+        );
+
+        let unset = restore_with_config(json!({}));
+        let yaml =
+            build_restore_config_yaml(&unset, &backup(), &cluster(), &None, &ResolvedAuth::None)
+                .unwrap();
+        let parsed: serde_yaml::Value = serde_yaml::from_str(&yaml).unwrap();
+        assert!(parsed["restore"].get("strip_offset_headers").is_none());
     }
 
     #[test]

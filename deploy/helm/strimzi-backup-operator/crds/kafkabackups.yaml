@@ -138,7 +138,7 @@ spec:
                     nullable: true
                     type: boolean
                   includeOffsetHeaders:
-                    description: Include original Kafka offset headers in backup records
+                    description: Add `x-original-offset` / `x-original-timestamp` headers to every archived record (Phase 1 of the three-phase restore). kafka-backup's default is true; set false for an archive whose records carry only their original headers.
                     nullable: true
                     type: boolean
                   internalTopics:
@@ -240,7 +240,7 @@ spec:
                   x-kubernetes-preserve-unknown-fields: true
                 type: array
               image:
-                description: 'Container image for the backup job (default: osodevops/kafka-backup:v0.16.0)'
+                description: 'Container image for the backup job (default: osodevops/kafka-backup:v0.19.0)'
                 nullable: true
                 type: string
               logging:

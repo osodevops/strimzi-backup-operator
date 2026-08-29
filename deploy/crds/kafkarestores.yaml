@@ -192,7 +192,7 @@ spec:
                   x-kubernetes-preserve-unknown-fields: true
                 type: array
               image:
-                description: 'Container image for the restore job (default: osodevops/kafka-backup:v0.16.0)'
+                description: 'Container image for the restore job (default: osodevops/kafka-backup:v0.19.0)'
                 nullable: true
                 type: string
               logging:
@@ -343,7 +343,7 @@ spec:
                     nullable: true
                     type: string
                   includeOriginalOffsetHeader:
-                    description: Include original offsets as headers on restored records
+                    description: 'Add `x-original-offset` / `x-original-timestamp` / `x-source-partition` headers to every restored record (kafka-backup default: false; also implied by the header-based strategy)'
                     nullable: true
                     type: boolean
                   parallelism:
@@ -428,6 +428,10 @@ spec:
                       format: int32
                       type: integer
                     type: array
+                  stripOffsetHeaders:
+                    description: 'Remove the headers kafka-backup added at backup time (`x-original-*`, `x-source-*`) before producing, so restored records match the source header-for-header (kafka-backup >= v0.19.0; default: false)'
+                    nullable: true
+                    type: boolean
                   topicCreation:
                     description: 'Topic creation strategy: auto or manual'
                     enum:
