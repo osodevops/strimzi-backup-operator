@@ -4,8 +4,8 @@ use k8s_openapi::apimachinery::pkg::apis::meta::v1::{ObjectMeta, OwnerReference}
 use kube::ResourceExt;
 
 use crate::crd::KafkaBackup;
+use crate::engine::JobImage;
 use crate::error::Result;
-use crate::reconcilers::DEFAULT_BACKUP_IMAGE;
 use crate::strimzi::kafka_cr::ResolvedKafkaCluster;
 use crate::strimzi::kafka_user::ResolvedAuth;
 
@@ -15,7 +15,11 @@ use super::templates::{
     merge_template_labels,
 };
 
-/// Build a Kubernetes Job spec for a backup operation
+/// Build a Kubernetes Job spec for a backup operation.
+///
+/// `image` is the engine image already resolved by the reconciler
+/// (`spec.image` → operator default, see `crate::engine`) together with the
+/// operator-wide `imagePullPolicy` for Job pods.
 pub fn build_backup_job(
     backup: &KafkaBackup,
     job_name: &str,
@@ -23,10 +27,10 @@ pub fn build_backup_job(
     cluster: &ResolvedKafkaCluster,
     auth: &ResolvedAuth,
     service_account_name: Option<&str>,
+    image: JobImage<'_>,
 ) -> Result<Job> {
     let cr_name = backup.name_any();
     let namespace = backup.namespace().unwrap_or_default();
-    let image = backup.spec.image.as_deref().unwrap_or(DEFAULT_BACKUP_IMAGE);
 
     // Build labels
     let mut labels = build_labels(&cr_name, &cluster.name, "backup");
@@ -50,7 +54,8 @@ pub fn build_backup_job(
     // Build container
     let mut container = Container {
         name: "backup".to_string(),
-        image: Some(image.to_string()),
+        image: Some(image.image.to_string()),
+        image_pull_policy: image.pull_policy.map(str::to_string),
         command: Some(vec!["kafka-backup".to_string()]),
         args: Some(vec![
             "backup".to_string(),
@@ -128,6 +133,7 @@ mod tests {
     use super::*;
     use crate::crd::common::*;
     use crate::crd::kafka_backup::*;
+    use crate::engine::{JobImage, DEFAULT_BACKUP_IMAGE};
 
     #[test]
     fn test_build_backup_job_basic() {
@@ -195,6 +201,7 @@ mod tests {
             &cluster,
             &ResolvedAuth::None,
             Some("strimzi-backup-operator"),
+            JobImage::compiled_in(),
         )
         .unwrap();
 
@@ -217,6 +224,7 @@ mod tests {
             pod_spec.containers[0].image.as_deref(),
             Some(DEFAULT_BACKUP_IMAGE)
         );
+        assert_eq!(pod_spec.containers[0].image_pull_policy, None);
         assert_eq!(pod_spec.restart_policy.as_deref(), Some("Never"));
 
         // Should have config + cluster-ca + storage-credentials volumes

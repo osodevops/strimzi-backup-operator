@@ -13,6 +13,7 @@ use kafka_backup_operator::controllers::{backup, restore, RunOptions};
 use kafka_backup_operator::crd::common::*;
 use kafka_backup_operator::crd::kafka_backup::*;
 use kafka_backup_operator::crd::KafkaBackup;
+use kafka_backup_operator::engine::EngineImageConfig;
 use kafka_backup_operator::metrics::prometheus::MetricsState;
 use kafka_backup_operator::shutdown::Shutdown;
 use kube::client::Body;
@@ -181,6 +182,7 @@ async fn backup_controller_watches_owned_jobs_and_cronjobs_by_label() {
     let task = tokio::spawn(backup::run_with(
         client,
         Arc::new(MetricsState::new()),
+        Arc::new(EngineImageConfig::compiled_in()),
         never_shutdown(),
         RunOptions {
             startup_resync_delays: &DELAYS,
@@ -209,6 +211,7 @@ async fn restore_controller_watches_owned_jobs_by_label() {
     let task = tokio::spawn(restore::run_with(
         client,
         Arc::new(MetricsState::new()),
+        Arc::new(EngineImageConfig::compiled_in()),
         never_shutdown(),
         RunOptions {
             startup_resync_delays: &DELAYS,
@@ -237,6 +240,7 @@ async fn backup_controller_reconciles_everything_again_after_the_startup_delay()
     let task = tokio::spawn(backup::run_with(
         client,
         Arc::new(MetricsState::new()),
+        Arc::new(EngineImageConfig::compiled_in()),
         never_shutdown(),
         RunOptions {
             startup_resync_delays: &DELAYS,
@@ -261,6 +265,7 @@ async fn without_a_startup_tick_the_cronjob_is_applied_once() {
     let task = tokio::spawn(backup::run_with(
         client,
         Arc::new(MetricsState::new()),
+        Arc::new(EngineImageConfig::compiled_in()),
         never_shutdown(),
         RunOptions {
             startup_resync_delays: &DELAYS,
@@ -286,6 +291,7 @@ async fn a_hung_reconcile_times_out_and_is_recorded_as_an_error() {
     let task = tokio::spawn(backup::run_with(
         client,
         Arc::clone(&metrics),
+        Arc::new(EngineImageConfig::compiled_in()),
         never_shutdown(),
         RunOptions {
             startup_resync_delays: &DELAYS,

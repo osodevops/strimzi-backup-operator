@@ -88,6 +88,7 @@ mod tests {
             size_bytes: None,
             topics_backed_up: None,
             partitions_backed_up: None,
+            image: None,
         }
     }
 

@@ -3,6 +3,7 @@ use kafka_backup_operator::adapters::backup_config::build_backup_config_yaml;
 use kafka_backup_operator::crd::common::*;
 use kafka_backup_operator::crd::kafka_backup::*;
 use kafka_backup_operator::crd::KafkaBackup;
+use kafka_backup_operator::engine::JobImage;
 use kafka_backup_operator::jobs::backup_job::build_backup_job;
 use kafka_backup_operator::jobs::cronjob::build_backup_cronjob;
 use kafka_backup_operator::strimzi::kafka_cr::ResolvedKafkaCluster;
@@ -170,6 +171,7 @@ fn test_backup_job_creation() {
         &cluster,
         &ResolvedAuth::None,
         Some("strimzi-backup-operator"),
+        JobImage::compiled_in(),
     )
     .unwrap();
 
@@ -256,6 +258,7 @@ fn test_backup_cronjob_uses_configured_service_account() {
         &cluster,
         &ResolvedAuth::None,
         Some("strimzi-backup-operator"),
+        JobImage::compiled_in(),
     )
     .unwrap();
 
@@ -301,6 +304,7 @@ fn test_backup_cronjob_propagates_suspend() {
         &cluster,
         &ResolvedAuth::None,
         None,
+        JobImage::compiled_in(),
     )
     .unwrap();
     assert_eq!(cronjob.spec.as_ref().unwrap().suspend, Some(false));
@@ -312,6 +316,7 @@ fn test_backup_cronjob_propagates_suspend() {
         &cluster,
         &ResolvedAuth::None,
         None,
+        JobImage::compiled_in(),
     )
     .unwrap();
     assert_eq!(cronjob.spec.as_ref().unwrap().suspend, Some(true));
@@ -330,6 +335,7 @@ fn test_backup_jobs_apply_template_host_aliases() {
         &cluster,
         &ResolvedAuth::None,
         Some("strimzi-backup-operator"),
+        JobImage::compiled_in(),
     )
     .unwrap();
 
@@ -348,6 +354,7 @@ fn test_backup_jobs_apply_template_host_aliases() {
         &cluster,
         &ResolvedAuth::None,
         Some("strimzi-backup-operator"),
+        JobImage::compiled_in(),
     )
     .unwrap();
 
@@ -402,6 +409,7 @@ fn test_backup_with_tls_auth() {
         &cluster,
         &auth,
         Some("strimzi-backup-operator"),
+        JobImage::compiled_in(),
     )
     .unwrap();
 
@@ -438,6 +446,7 @@ fn test_backup_jobs_apply_template_service_account() {
         &cluster,
         &ResolvedAuth::None,
         Some("strimzi-backup-operator"),
+        JobImage::compiled_in(),
     )
     .unwrap();
     let pod_spec = job.spec.as_ref().unwrap().template.spec.as_ref().unwrap();
@@ -452,6 +461,7 @@ fn test_backup_jobs_apply_template_service_account() {
         &cluster,
         &ResolvedAuth::None,
         Some("strimzi-backup-operator"),
+        JobImage::compiled_in(),
     )
     .unwrap();
     let cron_pod_spec = cronjob
@@ -484,6 +494,7 @@ fn test_backup_job_falls_back_to_operator_service_account() {
         &cluster,
         &ResolvedAuth::None,
         Some("strimzi-backup-operator"),
+        JobImage::compiled_in(),
     )
     .unwrap();
     let pod_spec = job.spec.as_ref().unwrap().template.spec.as_ref().unwrap();
@@ -504,6 +515,7 @@ fn test_backup_job_default_backoff_limit_is_three() {
         &sample_cluster(),
         &ResolvedAuth::None,
         None,
+        JobImage::compiled_in(),
     )
     .unwrap();
 
@@ -521,6 +533,7 @@ fn test_backup_job_custom_backoff_limit() {
         &sample_cluster(),
         &ResolvedAuth::None,
         None,
+        JobImage::compiled_in(),
     )
     .unwrap();
 
@@ -537,6 +550,7 @@ fn test_backup_cronjob_custom_backoff_limit() {
         &sample_cluster(),
         &ResolvedAuth::None,
         None,
+        JobImage::compiled_in(),
     )
     .unwrap();
 
@@ -567,6 +581,7 @@ fn test_backup_cronjob_carries_owner_reference_and_owned_selector_label() {
         &cluster,
         &ResolvedAuth::None,
         None,
+        JobImage::compiled_in(),
     )
     .expect("cronjob build");
 

@@ -192,7 +192,7 @@ spec:
                   x-kubernetes-preserve-unknown-fields: true
                 type: array
               image:
-                description: 'Container image for the restore job (default: osodevops/kafka-backup:v0.19.1)'
+                description: Container image for the restore job. Defaults to the operator-wide engine image (Helm `backupJobs.image` / `BACKUP_JOB_IMAGE`), else the kafka-backup release compiled into this operator version — see the README section "Compatibility".
                 nullable: true
                 type: string
               logging:
@@ -637,6 +637,10 @@ spec:
                   completionTime:
                     description: Completion time
                     format: date-time
+                    nullable: true
+                    type: string
+                  image:
+                    description: Engine image the restore Job ran with
                     nullable: true
                     type: string
                   pointInTimeTarget:

@@ -2,6 +2,49 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.25 - 2026-08-30
+
+### Added
+
+- A written operator ↔ engine **compatibility policy** (README "Compatibility",
+  [#67](https://github.com/osodevops/strimzi-backup-operator/issues/67)):
+  which `kafka-backup` release each operator version ships as its default Job
+  image, that any newer `0.x` engine may be pinned to pick up fixes without an
+  operator release, the minimum engine (`v0.16.0`) below which the generated
+  config degrades, and which typed fields need which engine.
+- Helm `backupJobs.image` / `backupJobs.imagePullPolicy` (env `BACKUP_JOB_IMAGE`
+  / `BACKUP_JOB_IMAGE_PULL_POLICY`): an installation-wide default engine image
+  and pull policy for Job pods. Precedence is `spec.image` → `backupJobs.image`
+  → the release's compiled-in default; an unset value leaves the compiled-in
+  default in charge, so the chart can never pin a tag that drifts from the
+  binary. `spec.image` is now documented in the README.
+- `EngineVersionSupported` status condition on `KafkaBackup` and
+  `KafkaRestore`: `False` / `EngineOlderThanMinimum` when the resolved image
+  names a release older than the minimum supported engine (the Job is still
+  created), `True` / `EngineVersionUnknown` for tags that are not a release
+  (`latest`, digests, custom tags). It survives the other status updates.
+- `status.lastBackup.image`, `status.backupHistory[].image` and
+  `status.restore.image` record the engine image each Job ran with.
+- Start-up log fields `default_job_image`, `default_job_image_source`,
+  `job_image_pull_policy`, `min_supported_engine`; metrics
+  `strimzi_backup_operator_engine_image_info{image,source}` and
+  `strimzi_backup_operator_engine_version_unsupported_total{controller}`.
+- CI `Engine Compatibility` job: pulls the compiled-in default image, runs the
+  operator's generated backup/restore configs through it and fails on any
+  "unknown config key"; nightly it does the same against the latest
+  kafka-backup release and warns when the default trails it.
+- `RELEASING.md`, `scripts/bump-engine.sh` (rewrites the compiled-in default,
+  the README line and a CHANGELOG stub in one go) and
+  `scripts/check-engine-image.sh` (run by CI and the release gate: README, CRDs
+  and manifests must agree with the compiled-in default).
+
+### Changed
+
+- The CRD descriptions of `spec.image` no longer embed the engine tag — they
+  point at the README instead — so a default bump touches one constant, the
+  README line and the CHANGELOG. `DEFAULT_BACKUP_IMAGE` moved to
+  `src/engine.rs` (re-exported from `reconcilers` for compatibility).
+
 ## 0.2.24 - 2026-08-30
 
 ### Fixed

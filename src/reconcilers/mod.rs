@@ -19,10 +19,9 @@ pub fn is_reconciliation_paused<K: kube::ResourceExt>(resource: &K) -> bool {
         .is_some_and(|value| value.eq_ignore_ascii_case("true"))
 }
 
-/// Default backup image. Pinned to a public, current kafka-backup release so
-/// backup/restore job behavior is deterministic and the image is anonymously
-/// pullable by Kubernetes.
-pub const DEFAULT_BACKUP_IMAGE: &str = "osodevops/kafka-backup:v0.19.1";
+/// Re-exported for callers that predate `crate::engine`; the constant and the
+/// resolution rules live there.
+pub use crate::engine::DEFAULT_BACKUP_IMAGE;
 
 /// Environment variable used by the Helm chart to pass the service account that
 /// backup/restore job pods should run as.

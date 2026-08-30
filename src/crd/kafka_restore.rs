@@ -82,7 +82,10 @@ pub struct KafkaRestoreSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub template: Option<PodTemplateSpec>,
 
-    /// Container image for the restore job (default: osodevops/kafka-backup:v0.19.1)
+    /// Container image for the restore job. Defaults to the operator-wide
+    /// engine image (Helm `backupJobs.image` / `BACKUP_JOB_IMAGE`), else the
+    /// kafka-backup release compiled into this operator version — see the
+    /// README section "Compatibility".
     #[serde(skip_serializing_if = "Option::is_none")]
     pub image: Option<String>,
 

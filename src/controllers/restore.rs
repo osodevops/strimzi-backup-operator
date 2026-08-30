@@ -15,6 +15,7 @@ use tracing::{error, info, instrument};
 
 use crate::controllers::{startup_resync_ticks, RunOptions, OWNED_RESTORE_SELECTOR};
 use crate::crd::KafkaRestore;
+use crate::engine::EngineImageConfig;
 use crate::metrics::prometheus::MetricsState;
 use crate::reconcilers::restore::reconcile_restore;
 use crate::shutdown::Shutdown;
@@ -22,6 +23,7 @@ use crate::shutdown::Shutdown;
 struct Context {
     client: Client,
     metrics: Arc<MetricsState>,
+    engine: Arc<EngineImageConfig>,
     reconcile_timeout: Duration,
 }
 
@@ -37,7 +39,7 @@ async fn reconcile(
     let started = Instant::now();
     let result = match tokio::time::timeout(
         ctx.reconcile_timeout,
-        reconcile_restore(restore, ctx.client.clone(), &ctx.metrics),
+        reconcile_restore(restore, ctx.client.clone(), &ctx.metrics, &ctx.engine),
     )
     .await
     {
@@ -61,13 +63,19 @@ fn error_policy(
     Action::requeue(Duration::from_secs(30))
 }
 
-pub async fn run(client: Client, metrics: Arc<MetricsState>, shutdown: Shutdown) {
-    run_with(client, metrics, shutdown, RunOptions::default()).await
+pub async fn run(
+    client: Client,
+    metrics: Arc<MetricsState>,
+    engine: Arc<EngineImageConfig>,
+    shutdown: Shutdown,
+) {
+    run_with(client, metrics, engine, shutdown, RunOptions::default()).await
 }
 
 pub async fn run_with(
     client: Client,
     metrics: Arc<MetricsState>,
+    engine: Arc<EngineImageConfig>,
     shutdown: Shutdown,
     options: RunOptions,
 ) {
@@ -77,6 +85,7 @@ pub async fn run_with(
     let context = Arc::new(Context {
         client: client.clone(),
         metrics,
+        engine,
         reconcile_timeout: options.reconcile_timeout,
     });
 

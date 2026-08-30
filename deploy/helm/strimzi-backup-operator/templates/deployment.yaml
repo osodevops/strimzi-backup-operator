@@ -66,6 +66,14 @@ spec:
                   fieldPath: metadata.namespace
             - name: BACKUP_JOB_SERVICE_ACCOUNT
               value: {{ default (include "strimzi-backup-operator.serviceAccountName" .) .Values.backupJobs.serviceAccountName | quote }}
+            {{- with .Values.backupJobs.image }}
+            - name: BACKUP_JOB_IMAGE
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.backupJobs.imagePullPolicy }}
+            - name: BACKUP_JOB_IMAGE_PULL_POLICY
+              value: {{ . | quote }}
+            {{- end }}
             {{- if .Values.watchNamespaces }}
             - name: STRIMZI_BACKUP_NAMESPACE
               value: {{ join "," .Values.watchNamespaces | quote }}

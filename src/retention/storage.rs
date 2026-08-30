@@ -369,6 +369,7 @@ fn manifest_to_history_entry(manifest: StoredBackupManifest) -> BackupHistoryEnt
         size_bytes: i64::try_from(size_bytes).ok(),
         topics_backed_up,
         partitions_backed_up: i32::try_from(partitions_backed_up).ok(),
+        image: None,
     }
 }
 

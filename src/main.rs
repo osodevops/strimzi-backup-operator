@@ -8,6 +8,7 @@ use tokio::task::JoinError;
 use tracing::{error, info};
 
 use kafka_backup_operator::controllers::{backup, restore};
+use kafka_backup_operator::engine::{EngineImageConfig, MIN_SUPPORTED_ENGINE};
 use kafka_backup_operator::leader::{
     self, LeaderElectionConfig, LeaderElector, LeaderError, LeaderState,
 };
@@ -30,8 +31,16 @@ async fn main() -> anyhow::Result<()> {
         .with_writer(stdout)
         .init();
 
+    // The engine image Jobs run when a resource does not pin one. Read once,
+    // before anything else, so a bad value fails the pod loudly at start-up
+    // rather than every reconcile.
+    let engine = EngineImageConfig::from_env()?;
     info!(
         version = env!("CARGO_PKG_VERSION"),
+        default_job_image = %engine.default_image,
+        default_job_image_source = engine.source.as_str(),
+        job_image_pull_policy = engine.pull_policy.as_deref().unwrap_or("kubernetes-default"),
+        min_supported_engine = %MIN_SUPPORTED_ENGINE,
         "Starting kafka-backup-operator"
     );
 
@@ -40,6 +49,8 @@ async fn main() -> anyhow::Result<()> {
 
     let shutdown = shutdown::listen();
     let metrics_state = Arc::new(MetricsState::new());
+    metrics_state.set_engine_image(&engine.default_image, engine.source.as_str());
+    let engine = Arc::new(engine);
 
     let namespace = std::env::var(leader::OPERATOR_NAMESPACE_ENV)
         .ok()
@@ -95,8 +106,18 @@ async fn main() -> anyhow::Result<()> {
         None => {
             info!("Leader election disabled; starting controllers");
             let controllers = join(
-                backup::run(client.clone(), Arc::clone(&metrics_state), shutdown.clone()),
-                restore::run(client.clone(), Arc::clone(&metrics_state), shutdown.clone()),
+                backup::run(
+                    client.clone(),
+                    Arc::clone(&metrics_state),
+                    Arc::clone(&engine),
+                    shutdown.clone(),
+                ),
+                restore::run(
+                    client.clone(),
+                    Arc::clone(&metrics_state),
+                    Arc::clone(&engine),
+                    shutdown.clone(),
+                ),
             );
             info!("Controllers started, watching for KafkaBackup and KafkaRestore resources");
             controllers.await;
@@ -137,8 +158,18 @@ async fn main() -> anyhow::Result<()> {
             info!("Acquired leadership; starting controllers");
 
             let controllers = join(
-                backup::run(client.clone(), Arc::clone(&metrics_state), shutdown.clone()),
-                restore::run(client.clone(), Arc::clone(&metrics_state), shutdown.clone()),
+                backup::run(
+                    client.clone(),
+                    Arc::clone(&metrics_state),
+                    Arc::clone(&engine),
+                    shutdown.clone(),
+                ),
+                restore::run(
+                    client.clone(),
+                    Arc::clone(&metrics_state),
+                    Arc::clone(&engine),
+                    shutdown.clone(),
+                ),
             );
             info!("Controllers started, watching for KafkaBackup and KafkaRestore resources");
 

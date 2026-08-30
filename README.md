@@ -8,7 +8,7 @@
 
 A Kubernetes operator for **Kafka backup** and disaster recovery of Strimzi-managed Apache Kafka clusters. Provides dedicated CRDs for automated Kafka backup scheduling, point-in-time recovery, and multi-cloud storage — designed for the Strimzi ecosystem.
 
-**Current release: 0.2.24** — default job image `osodevops/kafka-backup:v0.19.1`.
+**Current release: 0.2.25** — default job image `osodevops/kafka-backup:v0.19.1`.
 
 ## Why Kafka Backup?
 
@@ -193,6 +193,21 @@ Known limitation: duplicate header keys on one record are collapsed to the last 
 | `KafkaBackup` | `kb` | `kafkabackup.com/v1alpha1` | Defines a backup configuration with scheduling, retention, and storage |
 | `KafkaRestore` | `kr` | `kafkabackup.com/v1alpha1` | Defines a restore operation with PITR, topic mapping, and consumer group restore |
 
+### Engine image (`spec.image`)
+
+Both resources accept `spec.image`, the `kafka-backup` image the Job runs:
+
+```yaml
+spec:
+  image: osodevops/kafka-backup:v0.19.2   # example: any 0.x release newer than the default
+```
+
+Leave it unset to use the operator-wide default (Helm `backupJobs.image`, else
+the release's compiled-in engine). See [Compatibility](#compatibility) for
+which engines are supported and how the default is chosen; the image each Job
+actually ran with is recorded in `status.lastBackup.image` /
+`status.restore.image`.
+
 ### Advanced options passthrough
 
 The typed fields under `spec.backup` / `spec.restore` cover the common
@@ -370,6 +385,8 @@ spec:
 | `logging.format` | Log output format | `json` |
 | `serviceAccount.create` | Create a service account | `true` |
 | `backupJobs.serviceAccountName` | Service account used by backup/restore job pods (empty = operator service account) | `""` |
+| `backupJobs.image` | Default `kafka-backup` image for job pods (empty = the release's compiled-in engine; `spec.image` overrides per resource) — see [Compatibility](#compatibility) | `""` |
+| `backupJobs.imagePullPolicy` | `imagePullPolicy` for job pods (empty = Kubernetes default) | `""` |
 | `azureWorkloadIdentity.enabled` | Enable Azure Workload Identity | `false` |
 | `azureWorkloadIdentity.clientId` | Azure Managed Identity client ID | `""` |
 | `metrics.enabled` | Enable Prometheus metrics | `true` |
@@ -404,6 +421,64 @@ The service account only needs to exist (job pods don't call the Kubernetes
 API), but it should carry any workload-identity annotations (IRSA, Azure
 Workload Identity) your storage backend requires.
 
+
+## Compatibility
+
+Each operator release ships with a **default kafka-backup engine image**. It is
+compiled in (`DEFAULT_BACKUP_IMAGE` in `src/engine.rs`), named in the header of
+this README, logged at start-up (`default_job_image`), exposed as the
+`strimzi_backup_operator_engine_image_info` metric, and is what every Job runs
+unless told otherwise. The operator generates the engine's YAML config and
+runs the engine in a Job; backup and restore behaviour lives in the engine.
+
+**Choosing the engine.** Per resource: `spec.image` on `KafkaBackup` /
+`KafkaRestore`. For the whole installation: Helm `backupJobs.image` (env
+`BACKUP_JOB_IMAGE`). Precedence: `spec.image` → `backupJobs.image` →
+compiled-in default. The image a Job actually used is recorded in
+`status.lastBackup.image` / `status.restore.image`.
+
+**Policy.**
+
+- *Default engine* — tested in CI on every commit (the configs the operator
+  generates are run through it) and the only combination we guarantee.
+- *Newer engine* — any kafka-backup `0.x` release newer than the default is
+  supported: pin it with `spec.image` or `backupJobs.image` to pick up engine
+  fixes without waiting for an operator release. Since kafka-backup 0.16.0 an
+  unknown config key is warned about instead of failing the run, and
+  `spec.backup.config` / `spec.restore.config` are passed through verbatim, so
+  new engine options are usable immediately. A nightly CI leg runs the
+  generated configs against the latest engine release.
+- *Older engine* — supported down to the minimum in the table, with degraded
+  behaviour: options the older engine does not know are ignored with a
+  warning (see the feature table). Below the minimum the operator still runs
+  the Job but sets `EngineVersionSupported=False` on the resource (reason
+  `EngineOlderThanMinimum`) and counts it in
+  `strimzi_backup_operator_engine_version_unsupported_total`. Images whose tag
+  is not a release (`latest`, a digest, a custom tag) get
+  `EngineVersionSupported=True` with reason `EngineVersionUnknown`.
+- *Behaviour changes* — an engine bump can change data semantics (0.18.0
+  stopped flattening null header values to empty; 0.19.0 added
+  `strip_offset_headers`). Every default-image bump has a CHANGELOG entry
+  saying what changed and whether existing archives need re-taking. Pin
+  `spec.image` to keep an older engine.
+- *Engine 1.x* will require an operator release; 0.2.x does not support it.
+
+| Operator | Default engine | Minimum engine | Notes |
+|----------|----------------|----------------|-------|
+| 0.2.25 | v0.19.1 | v0.16.0 | `backupJobs.image`, `EngineVersionSupported` condition, `status.*.image` |
+| 0.2.22 – 0.2.24 | v0.19.1 | v0.16.0 | |
+| 0.2.21 | v0.19.0 | v0.16.0 | `stripOffsetHeaders` needs ≥ v0.19.0 |
+| 0.2.20 | v0.16.0 | v0.16.0 | `spec.backup.config` passthrough needs ≥ v0.16.0 |
+| ≤ 0.2.19 | v0.15.x | — | not supported |
+
+| Feature | Needs engine |
+|---------|--------------|
+| `spec.backup.config` / `spec.restore.config` passthrough | ≥ v0.16.0 |
+| null header values preserved (not flattened to empty) | ≥ v0.18.0 |
+| `spec.restore.stripOffsetHeaders` | ≥ v0.19.0 |
+| per-run incremental progress gauges (`kafka_backup_snapshot_records_*`) | ≥ v0.19.1 |
+
+Bumping the default is a scripted, gated step — see [RELEASING.md](RELEASING.md).
 
 ## High availability and upgrades
 
@@ -555,7 +630,8 @@ spec:
     maxPartitionLabels: 100
 ```
 
-This setting is supported by the default `kafka-backup:v0.19.1` job image.
+This setting is supported by the default job image (see
+[Compatibility](#compatibility)).
 `maxPartitionLabels` limits unique topic/partition series; set it to `0` only
 when unlimited per-partition cardinality is intentional.
 Durable last-success reporting should still come from the CR status or a
@@ -623,6 +699,9 @@ Contributions are welcome. Please open an issue or submit a pull request.
 3. Commit your changes
 4. Push to the branch (`git push origin feature/my-feature`)
 5. Open a pull request
+
+Releases, including how the default `kafka-backup` engine image is bumped, are
+described in [RELEASING.md](RELEASING.md).
 
 ## License
 

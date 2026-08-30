@@ -560,6 +560,98 @@ mod tests {
         crate::crd::kafka_backup::KafkaBackup::new("test-backup", spec)
     }
 
+    /// Every typed field the adapter accepts, so the generated YAML
+    /// exercises the whole operator → engine contract. With
+    /// `WRITE_CONFIG_FIXTURES=<dir>` the YAML is written to
+    /// `<dir>/restore-full.yaml` for `scripts/engine-config-contract.sh`
+    /// (issue #67). Fields the adapter rejects on purpose (`offsetFromEnd`,
+    /// `existingTopicPolicy: fail`, cross-group mappings) are left out.
+    fn kitchen_sink_restore() -> crate::crd::kafka_restore::KafkaRestore {
+        let spec = serde_json::from_value(json!({
+            "strimziClusterRef": {"name": "my-cluster", "listener": "plain"},
+            "backupRef": {"name": "contract-backup", "backupId": "contract-backup-20260830"},
+            "topics": {"include": ["orders.*"], "exclude": ["orders-test"]},
+            "pointInTime": {
+                "startTimestamp": "2026-08-01T00:00:00.000Z",
+                "timestamp": "2026-08-30T07:59:00.000Z"
+            },
+            "connection": {
+                "tcpKeepalive": true,
+                "keepaliveTimeSecs": 60,
+                "keepaliveIntervalSecs": 10,
+                "tcpNodelay": true
+            },
+            "topicMapping": [{"sourceTopic": "orders", "targetTopic": "orders-restored"}],
+            "consumerGroups": {
+                "restore": true,
+                "auto": true,
+                "groups": ["orders-consumer"],
+                "strategy": "header-based",
+                "offsetReport": "/tmp/kafka-backup-contract/offset-report.json",
+                "mapping": [{"sourceGroup": "orders-consumer", "targetGroup": "orders-consumer"}]
+            },
+            "restore": {
+                "topicCreation": "auto",
+                "existingTopicPolicy": "overwrite",
+                "dryRun": true,
+                "includeOriginalOffsetHeader": true,
+                "stripOffsetHeaders": false,
+                "sourcePartitions": [0, 1, 2],
+                "partitionMapping": [{"sourcePartition": 0, "targetPartition": 0}],
+                "parallelism": 4,
+                "rateLimitRecordsPerSec": 50000,
+                "rateLimitBytesPerSec": 104857600,
+                "produceBatchSize": 500,
+                "produceAcks": -1,
+                "produceTimeoutMs": 30000,
+                "checkpointState": "/tmp/kafka-backup-contract/restore-checkpoint.json",
+                "checkpointIntervalSecs": 10,
+                "defaultReplicationFactor": 3,
+                "purgeTopics": true,
+                "config": {"max_concurrent_partitions": 8}
+            },
+            "metrics": {
+                "enabled": true,
+                "port": 9090,
+                "bindAddress": "0.0.0.0",
+                "path": "/metrics",
+                "keepAliveSeconds": 60,
+                "updateIntervalMs": 5000,
+                "maxPartitionLabels": 100
+            }
+        }))
+        .expect("kitchen-sink KafkaRestore spec must deserialise");
+        crate::crd::kafka_restore::KafkaRestore::new("contract-restore", spec)
+    }
+
+    #[test]
+    fn kitchen_sink_restore_config_is_generated_and_exported() {
+        let yaml = build_restore_config_yaml(
+            &kitchen_sink_restore(),
+            &backup(),
+            &cluster(),
+            &None,
+            &ResolvedAuth::None,
+        )
+        .unwrap();
+        let parsed: serde_yaml::Value = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(parsed["mode"], serde_yaml::Value::from("restore"));
+        assert_eq!(
+            parsed["restore"]["max_concurrent_partitions"],
+            serde_yaml::Value::from(8)
+        );
+        assert_eq!(
+            parsed["restore"]["purge_topics"],
+            serde_yaml::Value::from(true)
+        );
+
+        if let Ok(dir) = std::env::var("WRITE_CONFIG_FIXTURES") {
+            let dir = std::path::Path::new(&dir);
+            std::fs::create_dir_all(dir).unwrap();
+            std::fs::write(dir.join("restore-full.yaml"), &yaml).unwrap();
+        }
+    }
+
     #[test]
     fn restore_config_passthrough_merges_and_wins() {
         let restore = restore_with_config(json!({

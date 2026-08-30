@@ -534,6 +534,9 @@ pub struct BackupHistoryEntry {
     /// Number of partitions backed up
     #[serde(skip_serializing_if = "Option::is_none")]
     pub partitions_backed_up: Option<i32>,
+    /// Engine image the backup Job ran with
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image: Option<String>,
 }
 
 /// Last backup details
@@ -564,6 +567,9 @@ pub struct LastBackupInfo {
     /// Newest record timestamp
     #[serde(skip_serializing_if = "Option::is_none")]
     pub newest_timestamp: Option<DateTime<Utc>>,
+    /// Engine image the backup Job ran with
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, JsonSchema, PartialEq)]
@@ -599,6 +605,9 @@ pub struct RestoreInfo {
     /// Actual PITR timestamp achieved
     #[serde(skip_serializing_if = "Option::is_none")]
     pub actual_point_in_time: Option<DateTime<Utc>>,
+    /// Engine image the restore Job ran with
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub image: Option<String>,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, JsonSchema, PartialEq)]

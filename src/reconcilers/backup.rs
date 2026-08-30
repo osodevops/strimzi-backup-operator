@@ -11,8 +11,9 @@ use std::collections::BTreeSet;
 use tracing::{debug, error, info, warn};
 
 use crate::adapters::backup_config::build_backup_config_yaml;
-use crate::crd::common::{BackupHistoryEntry, BackupStatus, LastBackupInfo};
+use crate::crd::common::{BackupHistoryEntry, BackupStatus, Condition, LastBackupInfo};
 use crate::crd::{KafkaBackup, KafkaBackupStatus};
+use crate::engine::{check_engine_version, EngineCheck, EngineImageConfig};
 use crate::error::{Error, Result};
 use crate::jobs::backup_job::build_backup_job;
 use crate::jobs::cronjob::build_backup_cronjob;
@@ -32,7 +33,8 @@ use crate::strimzi::tls::resolve_cluster_ca;
 pub async fn reconcile_backup(
     backup: Arc<KafkaBackup>,
     client: Client,
-    _metrics: &MetricsState,
+    metrics: &MetricsState,
+    engine: &EngineImageConfig,
 ) -> Result<()> {
     let name = backup.name_any();
     let namespace = backup
@@ -111,6 +113,18 @@ pub async fn reconcile_backup(
     create_or_update_config_map(&client, &namespace, &config_map_name, &config_yaml, &backup)
         .await?;
 
+    // Resolve the engine image for this resource and record whether it meets
+    // the compatibility policy. Informational only: the Job is created either
+    // way (README "Compatibility").
+    let image = engine.resolve(backup.spec.image.as_deref());
+    let engine_check = check_engine_version(image);
+    if let EngineCheck::Unsupported { found, min } = engine_check {
+        warn!(
+            %name, %image, %found, %min,
+            "Engine image is older than the minimum supported kafka-backup release"
+        );
+        metrics.record_engine_version_unsupported("backup");
+    }
     // Step 5: Check for scheduled vs one-shot
     let job_service_account = job_service_account_name();
     if let Some(schedule) = &backup.spec.schedule {
@@ -123,6 +137,7 @@ pub async fn reconcile_backup(
             &kafka_cluster,
             &resolved_auth,
             job_service_account.as_deref(),
+            engine.job_image(Some(image)),
         )?;
         let cronjob_api: Api<k8s_openapi::api::batch::v1::CronJob> =
             Api::namespaced(client.clone(), &namespace);
@@ -168,6 +183,7 @@ pub async fn reconcile_backup(
                 &kafka_cluster,
                 &resolved_auth,
                 job_service_account.as_deref(),
+                engine.job_image(Some(image)),
             )?;
 
             jobs_api
@@ -190,6 +206,15 @@ pub async fn reconcile_backup(
     // Step 8: Check running job status and update
     check_job_completion(&client, &backup_api, &backup, generation).await?;
     apply_retention_policy(&client, &backup_api, &backup, generation).await?;
+
+    // Last, so the outcome condition stays first in `status.conditions` and
+    // an unchanged verdict costs nothing.
+    ensure_engine_condition(
+        &backup_api,
+        &backup,
+        &engine_version_condition(&engine_check, image),
+    )
+    .await?;
 
     Ok(())
 }
@@ -462,6 +487,7 @@ async fn check_job_completion(
             size_bytes: None,
             topics_backed_up: None,
             partitions_backed_up: None,
+            image: job_image(job),
         };
 
         update_status_completed(backup_api, &name, generation, &history_entry).await?;
@@ -479,7 +505,10 @@ async fn check_job_completion(
 
         error!(%job_name, "Backup job failed");
         let mut status = current_backup_status(backup_api, &name).await?;
-        status.conditions = error_conditions(REASON_BACKUP_FAILED, &message);
+        replace_conditions(
+            &mut status.conditions,
+            error_conditions(REASON_BACKUP_FAILED, &message),
+        );
         status.observed_generation = Some(generation);
         patch_status(backup_api, &name, &status).await?;
     }
@@ -489,7 +518,10 @@ async fn check_job_completion(
 
 async fn update_status_running(api: &Api<KafkaBackup>, name: &str, generation: i64) -> Result<()> {
     let mut status = current_backup_status(api, name).await?;
-    status.conditions = vec![not_ready(REASON_BACKUP_RUNNING, "Backup job is running")];
+    replace_conditions(
+        &mut status.conditions,
+        vec![not_ready(REASON_BACKUP_RUNNING, "Backup job is running")],
+    );
     status.observed_generation = Some(generation);
     patch_status(api, name, &status).await
 }
@@ -527,10 +559,13 @@ async fn update_status_scheduled(
     if already_current {
         return Ok(());
     }
-    status.conditions = vec![ready(
-        REASON_BACKUP_SCHEDULED,
-        &format!("Next backup scheduled: {next_backup}"),
-    )];
+    replace_conditions(
+        &mut status.conditions,
+        vec![ready(
+            REASON_BACKUP_SCHEDULED,
+            &format!("Next backup scheduled: {next_backup}"),
+        )],
+    );
     status.observed_generation = Some(generation);
     status.next_scheduled_backup = Some(next_backup.to_string());
     patch_status(api, name, &status).await
@@ -551,10 +586,17 @@ async fn update_status_suspended(
     }
     // Manual merge patch: `nextScheduledBackup` must be an explicit null to be
     // cleared, but `KafkaBackupStatus` skips `None` fields when serializing.
-    let condition = ready(REASON_BACKUP_SUSPENDED, "Backup schedule is suspended");
+    let mut conditions = current.conditions;
+    replace_conditions(
+        &mut conditions,
+        vec![ready(
+            REASON_BACKUP_SUSPENDED,
+            "Backup schedule is suspended",
+        )],
+    );
     let patch = serde_json::json!({
         "status": {
-            "conditions": [condition],
+            "conditions": conditions,
             "observedGeneration": generation,
             "nextScheduledBackup": null
         }
@@ -585,12 +627,16 @@ async fn update_status_completed(
         partitions_backed_up: entry.partitions_backed_up,
         oldest_timestamp: None,
         newest_timestamp: None,
+        image: entry.image.clone(),
     };
 
-    status.conditions = vec![ready(
-        REASON_BACKUP_COMPLETED,
-        "Backup completed successfully",
-    )];
+    replace_conditions(
+        &mut status.conditions,
+        vec![ready(
+            REASON_BACKUP_COMPLETED,
+            "Backup completed successfully",
+        )],
+    );
     status.last_backup = Some(last_backup);
     status.observed_generation = Some(generation);
     upsert_history_entry(&mut status.backup_history, entry.clone());
@@ -604,9 +650,41 @@ async fn update_status_error(
     error: &Error,
 ) -> Result<()> {
     let mut status = current_backup_status(api, name).await?;
-    status.conditions = error_conditions(error.reason(), &error.to_string());
+    replace_conditions(
+        &mut status.conditions,
+        error_conditions(error.reason(), &error.to_string()),
+    );
     status.observed_generation = Some(generation);
     patch_status(api, name, &status).await
+}
+
+/// Set the `EngineVersionSupported` condition, patching only when it changed
+/// so an unchanged verdict does not churn the status on every reconcile.
+async fn ensure_engine_condition(
+    api: &Api<KafkaBackup>,
+    backup: &KafkaBackup,
+    condition: &Condition,
+) -> Result<()> {
+    let existing = backup
+        .status
+        .as_ref()
+        .and_then(|s| find_condition(&s.conditions, CONDITION_TYPE_ENGINE_VERSION_SUPPORTED));
+    if condition_matches(existing, condition) {
+        return Ok(());
+    }
+    let name = backup.name_any();
+    let mut status = current_backup_status(api, &name).await?;
+    set_condition(&mut status.conditions, condition.clone());
+    patch_status(api, &name, &status).await
+}
+
+/// The engine image a Job's first container runs.
+pub(crate) fn job_image(job: &Job) -> Option<String> {
+    job.spec
+        .as_ref()
+        .and_then(|s| s.template.spec.as_ref())
+        .and_then(|p| p.containers.first())
+        .and_then(|c| c.image.clone())
 }
 
 async fn current_backup_status(api: &Api<KafkaBackup>, name: &str) -> Result<KafkaBackupStatus> {

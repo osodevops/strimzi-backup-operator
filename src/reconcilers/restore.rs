@@ -12,10 +12,12 @@ use tracing::{debug, error, info, warn};
 use crate::adapters::restore_config::build_restore_config_yaml;
 use crate::crd::common::{Condition, RestoreInfo, RestoreStatus};
 use crate::crd::{KafkaBackup, KafkaRestore, KafkaRestoreStatus};
+use crate::engine::{check_engine_version, EngineCheck, EngineImageConfig};
 use crate::error::{Error, Result};
 use crate::jobs::job_state::{classify_jobs, JobsState};
 use crate::jobs::restore_job::build_restore_job;
 use crate::metrics::prometheus::MetricsState;
+use crate::reconcilers::backup::job_image;
 use crate::reconcilers::{
     cleanup_delete_params, is_reconciliation_paused, job_service_account_name, FINALIZER,
 };
@@ -27,7 +29,8 @@ use crate::strimzi::tls::resolve_cluster_ca;
 pub async fn reconcile_restore(
     restore: Arc<KafkaRestore>,
     client: Client,
-    _metrics: &MetricsState,
+    metrics: &MetricsState,
+    engine: &EngineImageConfig,
 ) -> Result<()> {
     let name = restore.name_any();
     let namespace = restore
@@ -78,15 +81,16 @@ pub async fn reconcile_restore(
         "kafkabackup.com/restore={name},kafkabackup.com/type=restore"
     ));
     let jobs = jobs_api.list(&lp).await?;
+    let sticky = sticky_conditions(restore.status.as_ref());
 
     match classify_jobs(&jobs.items) {
         JobsState::Succeeded { job_name } => {
             info!(%job_name, "Restore job completed successfully");
-            let job_status = jobs
+            let job = jobs
                 .items
                 .iter()
-                .find(|j| j.metadata.name.as_deref() == Some(job_name.as_str()))
-                .and_then(|j| j.status.as_ref());
+                .find(|j| j.metadata.name.as_deref() == Some(job_name.as_str()));
+            let job_status = job.and_then(|j| j.status.as_ref());
             let now = Utc::now();
             let restore_info = RestoreInfo {
                 start_time: job_status
@@ -105,8 +109,9 @@ pub async fn reconcile_restore(
                 restored_bytes: None,
                 point_in_time_target: None,
                 actual_point_in_time: None,
+                image: job.and_then(job_image),
             };
-            update_status_completed(&restore_api, &name, generation, &restore_info).await?;
+            update_status_completed(&restore_api, &name, generation, &restore_info, sticky).await?;
             return Ok(());
         }
         JobsState::Failed { job_name } => {
@@ -118,7 +123,7 @@ pub async fn reconcile_restore(
                 REASON_RESTORE_FAILED,
             ) {
                 error!(%job_name, "Restore job failed");
-                update_status_failed(&restore_api, &name, generation, &job_name).await?;
+                update_status_failed(&restore_api, &name, generation, &job_name, sticky).await?;
             }
             return Ok(());
         }
@@ -128,7 +133,7 @@ pub async fn reconcile_restore(
                 CONDITION_TYPE_READY,
                 REASON_RESTORE_RUNNING,
             ) {
-                update_status_running(&restore_api, &name, generation).await?;
+                update_status_running(&restore_api, &name, generation, sticky).await?;
             }
             return Ok(());
         }
@@ -157,7 +162,7 @@ pub async fn reconcile_restore(
     {
         Ok(cluster) => cluster,
         Err(e) => {
-            update_status_error(&restore_api, &name, generation, &e).await?;
+            update_status_error(&restore_api, &name, generation, &e, sticky).await?;
             return Err(e);
         }
     };
@@ -200,7 +205,19 @@ pub async fn reconcile_restore(
     )
     .await?;
 
-    // Step 6: Create the restore Job
+    // Step 6: Resolve the engine image, check it against the compatibility
+    // policy (informational — README "Compatibility") and create the Job.
+    let image = engine.resolve(restore.spec.image.as_deref());
+    let engine_check = check_engine_version(image);
+    if let EngineCheck::Unsupported { found, min } = engine_check {
+        warn!(
+            %name, %image, %found, %min,
+            "Engine image is older than the minimum supported kafka-backup release"
+        );
+        metrics.record_engine_version_unsupported("restore");
+    }
+    let engine_condition = engine_version_condition(&engine_check, image);
+
     let job_name = format!("{name}-{}", Utc::now().format("%Y%m%d-%H%M%S"));
     let job_service_account = job_service_account_name();
     let job = build_restore_job(
@@ -211,6 +228,7 @@ pub async fn reconcile_restore(
         &resolved_auth,
         &source_backup,
         job_service_account.as_deref(),
+        engine.job_image(Some(image)),
     )?;
 
     jobs_api
@@ -218,8 +236,8 @@ pub async fn reconcile_restore(
         .await
         .map_err(|e| Error::JobCreationFailed(e.to_string()))?;
 
-    info!(%job_name, "Created restore job");
-    update_status_running(&restore_api, &name, generation).await?;
+    info!(%job_name, %image, "Created restore job");
+    update_status_running(&restore_api, &name, generation, vec![engine_condition]).await?;
 
     Ok(())
 }
@@ -339,9 +357,36 @@ async fn create_or_update_config_map(
     Ok(())
 }
 
-async fn update_status_running(api: &Api<KafkaRestore>, name: &str, generation: i64) -> Result<()> {
+/// Conditions that describe the resource's configuration (the engine
+/// verdict) and must be carried across the outcome-only status writes below.
+fn sticky_conditions(status: Option<&KafkaRestoreStatus>) -> Vec<Condition> {
+    status
+        .map(|s| {
+            s.conditions
+                .iter()
+                .filter(|c| c.condition_type == CONDITION_TYPE_ENGINE_VERSION_SUPPORTED)
+                .cloned()
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn with_sticky(mut conditions: Vec<Condition>, sticky: Vec<Condition>) -> Vec<Condition> {
+    conditions.extend(sticky);
+    conditions
+}
+
+async fn update_status_running(
+    api: &Api<KafkaRestore>,
+    name: &str,
+    generation: i64,
+    sticky: Vec<Condition>,
+) -> Result<()> {
     let status = KafkaRestoreStatus {
-        conditions: vec![not_ready(REASON_RESTORE_RUNNING, "Restore job is running")],
+        conditions: with_sticky(
+            vec![not_ready(REASON_RESTORE_RUNNING, "Restore job is running")],
+            sticky,
+        ),
         observed_generation: Some(generation),
         ..Default::default()
     };
@@ -372,17 +417,21 @@ async fn update_status_completed(
     name: &str,
     generation: i64,
     info: &RestoreInfo,
+    sticky: Vec<Condition>,
 ) -> Result<()> {
     let status = KafkaRestoreStatus {
-        conditions: vec![
-            ready(REASON_RESTORE_COMPLETED, "Restore completed successfully"),
-            new_condition(
-                CONDITION_TYPE_RESTORE_COMPLETE,
-                STATUS_TRUE,
-                REASON_RESTORE_COMPLETED,
-                "Restore completed successfully",
-            ),
-        ],
+        conditions: with_sticky(
+            vec![
+                ready(REASON_RESTORE_COMPLETED, "Restore completed successfully"),
+                new_condition(
+                    CONDITION_TYPE_RESTORE_COMPLETE,
+                    STATUS_TRUE,
+                    REASON_RESTORE_COMPLETED,
+                    "Restore completed successfully",
+                ),
+            ],
+            sticky,
+        ),
         restore: Some(info.clone()),
         observed_generation: Some(generation),
     };
@@ -394,11 +443,15 @@ async fn update_status_failed(
     name: &str,
     generation: i64,
     job_name: &str,
+    sticky: Vec<Condition>,
 ) -> Result<()> {
     let status = KafkaRestoreStatus {
-        conditions: error_conditions(
-            REASON_RESTORE_FAILED,
-            &format!("Restore job {job_name} failed"),
+        conditions: with_sticky(
+            error_conditions(
+                REASON_RESTORE_FAILED,
+                &format!("Restore job {job_name} failed"),
+            ),
+            sticky,
         ),
         observed_generation: Some(generation),
         ..Default::default()
@@ -411,9 +464,10 @@ async fn update_status_error(
     name: &str,
     generation: i64,
     error: &Error,
+    sticky: Vec<Condition>,
 ) -> Result<()> {
     let status = KafkaRestoreStatus {
-        conditions: error_conditions(error.reason(), &error.to_string()),
+        conditions: with_sticky(error_conditions(error.reason(), &error.to_string()), sticky),
         observed_generation: Some(generation),
         ..Default::default()
     };
