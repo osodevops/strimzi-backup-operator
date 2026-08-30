@@ -33,6 +33,12 @@ RUN cargo build --release --bin kafka-backup-operator
 # Runtime stage
 FROM debian:bookworm-slim
 
+LABEL org.opencontainers.image.title="strimzi-backup-operator" \
+      org.opencontainers.image.description="Kubernetes operator for Kafka backup and restore, integrated with Strimzi" \
+      org.opencontainers.image.source="https://github.com/osodevops/strimzi-backup-operator" \
+      org.opencontainers.image.vendor="OSO DevOps" \
+      org.opencontainers.image.licenses="Apache-2.0"
+
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y \
     ca-certificates \

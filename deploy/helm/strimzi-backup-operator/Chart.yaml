@@ -21,4 +21,5 @@ keywords:
   - disaster-recovery
 annotations:
   category: Infrastructure
+  artifacthub.io/license: Apache-2.0
   artifacthub.io/disclaimer: "Not affiliated with the Strimzi project or CNCF"

@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Fixed
+
+- The repository now ships the Apache License 2.0 it has always declared
+  ([#66](https://github.com/osodevops/strimzi-backup-operator/issues/66)).
+  `README.md` and `Cargo.toml` stated Apache-2.0 but no `LICENSE` file
+  existed, so GitHub reported no licence and the README link 404'd. Added
+  `LICENSE` and `NOTICE` at the root and in the Helm chart, the
+  `artifacthub.io/license` chart annotation, and
+  `org.opencontainers.image.licenses` (plus title/source/vendor) labels on the
+  container image.
+
 ## 0.2.23 - 2026-08-29
 
 ### Fixed
