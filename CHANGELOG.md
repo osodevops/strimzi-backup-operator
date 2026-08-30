@@ -37,6 +37,13 @@ All notable changes to this project will be documented in this file.
   the README line and a CHANGELOG stub in one go) and
   `scripts/check-engine-image.sh` (run by CI and the release gate: README, CRDs
   and manifests must agree with the compiled-in default).
+- `scripts/e2e/`: the engine images the minikube scenarios drive are
+  parameters (`ENGINE_OLD`, `ENGINE_NEW` — the latter defaults to this
+  checkout's compiled-in default) instead of `v0.19.x` literals, `images.sh`
+  patches the constant wherever the source keeps it, and
+  `scenario-11-helm-default-image.sh` covers `backupJobs.image`, the
+  `spec.image` precedence, `EngineVersionSupported=False` below the minimum
+  and the fallback to the compiled-in default.
 
 ### Changed
 

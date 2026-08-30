@@ -4,12 +4,12 @@
 # the new pod is Ready, a touch loop keeps both pods reconciling.
 export SCEN=01-baseline; source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 N=${N:-3}
-img_of() { case "$1" in a|*-a) echo osodevops/kafka-backup:v0.19.0;; b|*-b) echo osodevops/kafka-backup:v0.19.1;; esac; }
+img_of() { case "$1" in a|*-a) img_old;; b|*-b) img_new;; esac; }
 
 operator_uninstall
 operator_install "$CHART_OLD" 0.2.22-a
 apply_cr
-wait_for 120 img_is "$(img_of a)" >/dev/null || fail "CronJob never reached v0.19.0"
+wait_for 120 img_is "$(img_of a)" >/dev/null || fail "CronJob never reached $(img_old)"
 [ "$(strategy_type)" = "RollingUpdate" ] || fail "expected RollingUpdate on the old chart, got $(strategy_type)"
 k -n "$NS_OP" patch deploy "$RELEASE" --type=json -p='[{"op":"add","path":"/spec/template/spec/containers/0/lifecycle","value":{"preStop":{"exec":{"command":["sh","-c","sleep 20"]}}}}]' >/dev/null
 k -n "$NS_OP" rollout status deploy/"$RELEASE" --timeout=120s >/dev/null

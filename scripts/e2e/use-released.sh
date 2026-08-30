@@ -17,7 +17,7 @@ if [ "$(uname -m)" = "arm64" ] && [ "$arch" != "arm64" ]; then
 else
   docker tag "$SRC" "$IMAGE_REPO:0.2.23-b"
 fi
-got=$(docker run --rm --entrypoint sh "$IMAGE_REPO:0.2.23-b" -c 'grep -a -o -m1 "osodevops/kafka-backup:v0\.[0-9]*\.[0-9]*" /usr/local/bin/kafka-backup-operator | head -n1')
+got=$(docker run --rm --entrypoint sh "$IMAGE_REPO:0.2.23-b" -c 'grep -a -o -m1 "osodevops/kafka-backup:v[0-9]*\.[0-9]*\.[0-9]*" /usr/local/bin/kafka-backup-operator | head -n1')
 minikube -p "$PROFILE" image rm "$IMAGE_REPO:0.2.23-b" >/dev/null 2>&1 || true
 minikube -p "$PROFILE" image load "$IMAGE_REPO:0.2.23-b"
 log "sbo-e2e/operator:0.2.23-b now = $SRC (created $(docker image inspect "$SRC" --format '{{.Created}}'), default job image $got)"

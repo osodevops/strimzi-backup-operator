@@ -10,6 +10,12 @@ RELEASE="${RELEASE:-strimzi-backup-operator}"
 IMAGE_REPO="${IMAGE_REPO:-sbo-e2e/operator}"
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 E2E_DIR="${E2E_DIR:-$ROOT/.e2e}"
+# Engine images the scenarios drive (issue #67). The "-b" operator builds carry
+# ENGINE_NEW — this checkout's compiled-in default — and the "-a" builds
+# ENGINE_OLD, so an operator upgrade is observable on the CronJob image
+# (issue #62). Override both to exercise another pair.
+ENGINE_NEW="${ENGINE_NEW:-$("$ROOT/scripts/default-engine-image.sh")}"
+ENGINE_OLD="${ENGINE_OLD:-osodevops/kafka-backup:v0.19.0}"
 EVID="${EVID:-$E2E_DIR/evidence}"
 SCEN="${SCEN:-misc}"
 CHART_FIX="$ROOT/deploy/helm/strimzi-backup-operator"
@@ -53,6 +59,13 @@ save_logs() { for p in $(op_pod_names); do op_logs "$p" > "$EVID/$SCEN/$1-$p.log
 # wait_for <budget-seconds> <command...>  — prints "ok after Ns"
 wait_for() { local budget=$1; shift; local t0=$(date +%s); until "$@" >/dev/null 2>&1; do if (( $(date +%s) - t0 > budget )); then return 1; fi; sleep 0.5; done; echo "ok after $(( $(date +%s) - t0 ))s"; }
 img_is() { [ "$(cronjob_image)" = "$1" ]; }
+img_old() { echo "$ENGINE_OLD"; }
+img_new() { echo "$ENGINE_NEW"; }
+# Engine image the CronJob must carry after installing operator build tag $1 (…-a / …-b).
+img_for_tag() { case "$1" in *-a) img_old;; *-b) img_new;; *) fail "unknown build tag $1";; esac; }
+patch_cronjob_image() { k -n "$NS_KAFKA" patch cronjob incr-scheduled --type=json -p="[{\"op\":\"replace\",\"path\":\"/spec/jobTemplate/spec/template/spec/containers/0/image\",\"value\":\"$1\"}]" >/dev/null; }
+# "<status>/<reason>" of condition $2 on KafkaBackup $1.
+cr_condition() { k -n "$NS_KAFKA" get kafkabackup "$1" -o jsonpath="{.status.conditions[?(@.type==\"$2\")].status}/{.status.conditions[?(@.type==\"$2\")].reason}"; }
 # Re-evaluated predicates for wait_for (a "$(...)" in the wait_for argument list expands only once).
 leader_count_is() { [ "$(leader_pods | wc -l | tr -d ' ')" = "$1" ]; }
 restarts_ge() { local n; n=$(pod_times | grep "^$1" | grep -o 'restarts=[0-9]*' | cut -d= -f2); [ -n "$n" ] && [ "$n" -ge "$2" ]; }
