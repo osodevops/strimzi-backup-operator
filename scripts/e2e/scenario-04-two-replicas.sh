@@ -3,7 +3,7 @@
 export SCEN=04-two-replicas; source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 operator_uninstall
 operator_install "$CHART_FIX" 0.2.23-b --set replicaCount=2; apply_cr
-wait_for 120 img_is osodevops/kafka-backup:v0.19.1 >/dev/null || fail "precondition"
+wait_for 120 img_is "$(img_new)" >/dev/null || fail "precondition"
 wait_for 30 ready_replicas_is 2 >/dev/null || fail "both replicas must become Ready"
 leaders=$(leader_pods | wc -l | tr -d ' '); [ "$leaders" = 1 ] || fail "expected exactly 1 leader, got $leaders: $(leader_pods)"
 leader=$(leader_pods); standby=$(op_pod_names | grep -v "^$leader$" | head -1)

@@ -13,10 +13,10 @@ diff "$EVID/$SCEN/rules-old.txt" "$EVID/$SCEN/rules-new.txt" >/dev/null || fail 
 pod=$(op_pod_names | head -1)
 for _ in $(seq 1 20); do op_logs "$pod" | grep -q 'Leader election disabled' && break; sleep 1; done
 op_logs "$pod" | grep -q 'Leader election disabled' || fail "missing 'Leader election disabled' log"
-wait_for 120 img_is osodevops/kafka-backup:v0.19.1 >/dev/null || fail "precondition"
+wait_for 120 img_is "$(img_new)" >/dev/null || fail "precondition"
 [ "$(readyz_of "$pod")" = leader ] || fail "readyz opted out: $(readyz_of "$pod")"
 operator_install "$CHART_FIX" 0.2.23-a --set leaderElection.enabled=false
-r=$(wait_for 30 img_is osodevops/kafka-backup:v0.19.0) || fail "opt-out upgrade left a stale CronJob"
+r=$(wait_for 30 img_is "$(img_old)") || fail "opt-out upgrade left a stale CronJob"
 evidence "opt-out: no lease, RBAC unchanged, upgrade ok ($r)"
 pass "opt-out compatibility"
 operator_install "$CHART_FIX" 0.2.23-b

@@ -8,7 +8,7 @@ N=${N:-2}
 rolling_spec() { k -n "$NS_OP" get deploy "$RELEASE" -o jsonpath='{.spec.strategy.type}/{.spec.strategy.rollingUpdate.maxSurge}/{.spec.strategy.rollingUpdate.maxUnavailable}'; }
 upgrade_and_check() { # <to-tag> <chart> <label> <expect-overlap yes|no|any> [helm args...]
   local to=$1 chart=$2 label=$3 overlap=$4; shift 4
-  local expect; expect=$([ "${to##*-}" = a ] && echo osodevops/kafka-backup:v0.19.0 || echo osodevops/kafka-backup:v0.19.1)
+  local expect; expect=$(img_for_tag "$to")
   PODLOG=$(watch_pods_bg "$EVID/$SCEN/pods-$label.jsonl")
   ( for _ in $(seq 1 40); do touch_cr; sleep 0.5; done ) & TOUCH=$!
   local t0; t0=$(date +%s)
@@ -25,7 +25,7 @@ upgrade_and_check() { # <to-tag> <chart> <label> <expect-overlap yes|no|any> [he
 }
 operator_uninstall
 operator_install "$CHART_OLD" 0.2.22-a; apply_cr
-wait_for 120 img_is osodevops/kafka-backup:v0.19.0 >/dev/null || fail "precondition"
+wait_for 120 img_is "$(img_old)" >/dev/null || fail "precondition"
 upgrade_and_check 0.2.23-b "$CHART_FIX" real-upgrade any
 [ "$(rolling_spec)" = "RollingUpdate/0/1" ] || fail "default strategy is $(rolling_spec), expected RollingUpdate/0/1"
 for i in $(seq 1 "$N"); do
@@ -35,7 +35,7 @@ done
 # Opt-in Recreate on a fresh install: the old pod is fully gone before the new one starts.
 operator_uninstall
 operator_install "$CHART_FIX" 0.2.23-a --set updateStrategy.type=Recreate; apply_cr
-wait_for 120 img_is osodevops/kafka-backup:v0.19.0 >/dev/null || fail "precondition (recreate)"
+wait_for 120 img_is "$(img_old)" >/dev/null || fail "precondition (recreate)"
 [ "$(strategy_type)" = Recreate ] || fail "strategy $(strategy_type)"
 upgrade_and_check 0.2.23-b "$CHART_FIX" recreate-a-to-b no --set updateStrategy.type=Recreate
 upgrade_and_check 0.2.23-a "$CHART_FIX" recreate-b-to-a no --set updateStrategy.type=Recreate
