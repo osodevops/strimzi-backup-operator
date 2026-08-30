@@ -8,6 +8,8 @@
 
 A Kubernetes operator for **Kafka backup** and disaster recovery of Strimzi-managed Apache Kafka clusters. Provides dedicated CRDs for automated Kafka backup scheduling, point-in-time recovery, and multi-cloud storage — designed for the Strimzi ecosystem.
 
+**Current release: 0.2.21** — default job image `osodevops/kafka-backup:v0.19.0`.
+
 ## Why Kafka Backup?
 
 Strimzi makes running Apache Kafka on Kubernetes straightforward, but **backup and disaster recovery remain unsolved problems** in the Strimzi ecosystem:
@@ -117,6 +119,7 @@ spec:
   backup:
     compression: zstd
     parallelism: 4
+    includeOffsetHeaders: true   # default; adds x-original-offset / x-original-timestamp to every archived record
   logging:
     level: warn
     format: json
@@ -163,7 +166,25 @@ spec:
       targetTopic: orders-restored
   consumerGroups:
     restore: true
+  restore:
+    stripOffsetHeaders: false   # true = restore header-for-header identical to the source (kafka-backup >= v0.19.0)
 ```
+
+### Offset headers and record fidelity
+
+kafka-backup restores keys, values, timestamps and headers verbatim (null and empty
+values stay distinct — job images `>= v0.18.0`). The one deliberate addition is a pair
+of offset-tracking headers, controlled by three fields:
+
+| Field | kafka-backup key | Default | Effect |
+|-------|------------------|---------|--------|
+| `spec.backup.includeOffsetHeaders` | `backup.include_offset_headers` | `true` | Adds `x-original-offset` / `x-original-timestamp` (little-endian `i64`) — and `x-source-cluster` when `sourceClusterId` is set — to every **archived** record. Needed for header-based consumer offset recovery. |
+| `spec.restore.includeOriginalOffsetHeader` | `restore.include_original_offset_header` | `false` | Adds `x-original-offset`, `x-original-timestamp` and `x-source-partition` to every **restored** record (also implied by the header-based strategy). |
+| `spec.restore.stripOffsetHeaders` | `restore.strip_offset_headers` | `false` | Removes all of the above from archived records before producing, so a restore of an archive taken with the default `includeOffsetHeaders: true` is header-for-header identical to the source. Requires a job image `>= v0.19.0`. Offset mapping is unaffected — the source offset is stored natively in the segment. |
+
+Any other native key can be passed through `spec.backup.config` / `spec.restore.config`.
+Known limitation: duplicate header keys on one record are collapsed to the last one
+([kafka-backup#156](https://github.com/osodevops/kafka-backup/issues/156)).
 
 ## Custom Resource Definitions
 
