@@ -249,7 +249,7 @@ jobs:
           docker run --rm "${{ steps.engines.outputs.default }}" --version
 
       - name: Write generated config fixtures
-        run: cargo test --lib adapters:: -- --nocapture
+        run: "cargo test --lib adapters:: -- --nocapture"
         env:
           WRITE_CONFIG_FIXTURES: ${{ github.workspace }}/target/config-fixtures
 
