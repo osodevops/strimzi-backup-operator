@@ -21,6 +21,8 @@ pub struct MetricsState {
     pub backup_storage_bytes: GaugeVec,
     pub backup_lag_seconds: GaugeVec,
     pub operator_leader: IntGaugeVec,
+    pub operator_engine_image_info: IntGaugeVec,
+    pub operator_engine_version_unsupported_total: IntCounterVec,
 }
 
 impl Default for MetricsState {
@@ -213,6 +215,33 @@ impl MetricsState {
             .register(Box::new(operator_leader.clone()))
             .expect("metric registration");
 
+        // The operator-wide default engine image (README "Compatibility"),
+        // so dashboards can show which kafka-backup release Jobs run without
+        // reading pod specs.
+        let operator_engine_image_info = IntGaugeVec::new(
+            Opts::new(
+                "strimzi_backup_operator_engine_image_info",
+                "1 for the default kafka-backup image used by backup/restore Jobs that do not set spec.image; source is compiled-in or env (Helm backupJobs.image)",
+            ),
+            &["image", "source"],
+        )
+        .expect("metric creation");
+        registry
+            .register(Box::new(operator_engine_image_info.clone()))
+            .expect("metric registration");
+
+        let operator_engine_version_unsupported_total = IntCounterVec::new(
+            Opts::new(
+                "strimzi_backup_operator_engine_version_unsupported_total",
+                "Reconciliations that resolved an engine image older than the minimum supported kafka-backup release",
+            ),
+            &["controller"],
+        )
+        .expect("metric creation");
+        registry
+            .register(Box::new(operator_engine_version_unsupported_total.clone()))
+            .expect("metric registration");
+
         Self {
             registry,
             operator_build_info,
@@ -229,7 +258,24 @@ impl MetricsState {
             backup_storage_bytes,
             backup_lag_seconds,
             operator_leader,
+            operator_engine_image_info,
+            operator_engine_version_unsupported_total,
         }
+    }
+
+    /// Publish the operator-wide default engine image.
+    pub fn set_engine_image(&self, image: &str, source: &str) {
+        self.operator_engine_image_info
+            .with_label_values(&[image, source])
+            .set(1);
+    }
+
+    /// Record a reconcile that resolved an engine image below the minimum
+    /// supported release.
+    pub fn record_engine_version_unsupported(&self, controller: &str) {
+        self.operator_engine_version_unsupported_total
+            .with_label_values(&[controller])
+            .inc();
     }
 
     /// Publish whether this replica currently leads.
@@ -324,6 +370,24 @@ mod tests {
         let output = state.gather();
         assert!(output.contains("strimzi_backup_operator_build_info"));
         assert!(output.contains(&format!("version=\"{}\"", env!("CARGO_PKG_VERSION"))));
+    }
+
+    #[test]
+    fn engine_image_info_gauge_reports_image_and_source() {
+        let state = MetricsState::new();
+        state.set_engine_image("osodevops/kafka-backup:v0.19.1", "compiled-in");
+        state.record_engine_version_unsupported("backup");
+
+        let output = state.gather();
+        assert!(output.contains(
+            "strimzi_backup_operator_engine_image_info{image=\"osodevops/kafka-backup:v0.19.1\",source=\"compiled-in\"} 1"
+        ), "{output}");
+        assert!(
+            output.contains(
+                "strimzi_backup_operator_engine_version_unsupported_total{controller=\"backup\"} 1"
+            ),
+            "{output}"
+        );
     }
 
     #[test]

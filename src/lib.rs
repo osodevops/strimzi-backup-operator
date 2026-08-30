@@ -1,6 +1,7 @@
 pub mod adapters;
 pub mod controllers;
 pub mod crd;
+pub mod engine;
 pub mod error;
 pub mod jobs;
 pub mod leader;

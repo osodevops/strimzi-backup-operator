@@ -4,12 +4,12 @@
 export SCEN=08-startup; source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 operator_uninstall
 operator_install "$CHART_FIX" 0.2.23-b; apply_cr
-wait_for 120 img_is osodevops/kafka-backup:v0.19.1 >/dev/null || fail "precondition"
+wait_for 120 img_is "$(img_new)" >/dev/null || fail "precondition"
 k -n "$NS_OP" scale deploy "$RELEASE" --replicas=0 >/dev/null
 k -n "$NS_OP" wait pod -l app.kubernetes.io/name=strimzi-backup-operator --for=delete --timeout=60s >/dev/null 2>&1 || true
-k -n "$NS_KAFKA" patch cronjob incr-scheduled --type=json -p='[{"op":"replace","path":"/spec/jobTemplate/spec/template/spec/containers/0/image","value":"osodevops/kafka-backup:v0.19.0"}]' >/dev/null
+patch_cronjob_image "$(img_old)"
 k -n "$NS_OP" scale deploy "$RELEASE" --replicas=1 >/dev/null
-r=$(wait_for 120 img_is osodevops/kafka-backup:v0.19.1) || fail "stale CronJob not corrected after restart"
+r=$(wait_for 120 img_is "$(img_new)") || fail "stale CronJob not corrected after restart"
 wait_for 30 has_holder >/dev/null || fail "no leader after restart"; pod=$(lease_holder)
 started_of() { pod_times | grep "^$pod" | cut -f3 | cut -d= -f2; }
 started_known() { [ "$(started_of)" != "-" ]; }

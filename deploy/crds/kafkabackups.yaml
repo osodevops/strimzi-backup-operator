@@ -240,7 +240,7 @@ spec:
                   x-kubernetes-preserve-unknown-fields: true
                 type: array
               image:
-                description: 'Container image for the backup job (default: osodevops/kafka-backup:v0.19.1)'
+                description: Container image for the backup job. Defaults to the operator-wide engine image (Helm `backupJobs.image` / `BACKUP_JOB_IMAGE`), else the kafka-backup release compiled into this operator version — see the README section "Compatibility".
                 nullable: true
                 type: string
               logging:
@@ -763,6 +763,10 @@ spec:
                     id:
                       description: Unique backup ID
                       type: string
+                    image:
+                      description: Engine image the backup Job ran with
+                      nullable: true
+                      type: string
                     partitionsBackedUp:
                       description: Number of partitions backed up
                       format: int32
@@ -835,6 +839,10 @@ spec:
                     type: string
                   id:
                     description: Unique backup ID
+                    type: string
+                  image:
+                    description: Engine image the backup Job ran with
+                    nullable: true
                     type: string
                   newestTimestamp:
                     description: Newest record timestamp

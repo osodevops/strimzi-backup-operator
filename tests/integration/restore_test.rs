@@ -4,6 +4,7 @@ use kafka_backup_operator::crd::common::*;
 use kafka_backup_operator::crd::kafka_backup::*;
 use kafka_backup_operator::crd::kafka_restore::*;
 use kafka_backup_operator::crd::{KafkaBackup, KafkaRestore};
+use kafka_backup_operator::engine::JobImage;
 use kafka_backup_operator::jobs::restore_job::build_restore_job;
 use kafka_backup_operator::strimzi::kafka_cr::ResolvedKafkaCluster;
 use kafka_backup_operator::strimzi::kafka_user::ResolvedAuth;
@@ -246,6 +247,7 @@ fn test_restore_job_creation() {
         &ResolvedAuth::None,
         &backup,
         Some("strimzi-backup-operator"),
+        JobImage::compiled_in(),
     )
     .unwrap();
 
@@ -323,6 +325,7 @@ fn test_restore_job_applies_template_host_aliases() {
         &ResolvedAuth::None,
         &backup,
         Some("strimzi-backup-operator"),
+        JobImage::compiled_in(),
     )
     .unwrap();
 
@@ -457,6 +460,7 @@ fn test_restore_job_applies_template_service_account() {
         &ResolvedAuth::None,
         &backup,
         Some("strimzi-backup-operator"),
+        JobImage::compiled_in(),
     )
     .unwrap();
 
@@ -481,6 +485,7 @@ fn test_restore_job_default_backoff_limit_is_zero() {
         &ResolvedAuth::None,
         &sample_backup(),
         None,
+        JobImage::compiled_in(),
     )
     .unwrap();
 
@@ -499,6 +504,7 @@ fn test_restore_job_custom_backoff_limit() {
         &ResolvedAuth::None,
         &sample_backup(),
         None,
+        JobImage::compiled_in(),
     )
     .unwrap();
 

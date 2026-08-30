@@ -47,6 +47,14 @@ backupJobs:
   # resources are created; individual resources can override it with
   # spec.template.pod.serviceAccountName.
   serviceAccountName: ""
+  # Default kafka-backup engine image for backup/restore Job pods. Empty = the
+  # release's compiled-in default (see README "Compatibility"); the operator
+  # logs it at start-up and exposes it as strimzi_backup_operator_engine_image_info.
+  # Individual KafkaBackup/KafkaRestore resources override it with spec.image.
+  image: ""
+  # imagePullPolicy for Job pods. Empty = Kubernetes default (IfNotPresent for
+  # a pinned tag, Always for :latest). One of Always, IfNotPresent, Never.
+  imagePullPolicy: ""
 
 # Azure Workload Identity configuration
 # When enabled, the operator can authenticate to Azure services using federated identity tokens

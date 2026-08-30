@@ -4,8 +4,8 @@ use k8s_openapi::apimachinery::pkg::apis::meta::v1::{ObjectMeta, OwnerReference}
 use kube::ResourceExt;
 
 use crate::crd::KafkaBackup;
+use crate::engine::JobImage;
 use crate::error::Result;
-use crate::reconcilers::DEFAULT_BACKUP_IMAGE;
 use crate::strimzi::kafka_cr::ResolvedKafkaCluster;
 use crate::strimzi::kafka_user::ResolvedAuth;
 
@@ -14,17 +14,19 @@ use super::templates::{
     build_volumes_and_mounts, job_metrics_ports, job_name_env_var, merge_template_labels,
 };
 
-/// Build a Kubernetes CronJob for scheduled backups
+/// Build a Kubernetes CronJob for scheduled backups.
+///
+/// `image`: see [`build_backup_job`](super::backup_job::build_backup_job).
 pub fn build_backup_cronjob(
     backup: &KafkaBackup,
     config_map_name: &str,
     cluster: &ResolvedKafkaCluster,
     auth: &ResolvedAuth,
     service_account_name: Option<&str>,
+    image: JobImage<'_>,
 ) -> Result<CronJob> {
     let cr_name = backup.name_any();
     let namespace = backup.namespace().unwrap_or_default();
-    let image = backup.spec.image.as_deref().unwrap_or(DEFAULT_BACKUP_IMAGE);
 
     let schedule = backup
         .spec
@@ -51,7 +53,8 @@ pub fn build_backup_cronjob(
     // Build container
     let mut container = Container {
         name: "backup".to_string(),
-        image: Some(image.to_string()),
+        image: Some(image.image.to_string()),
+        image_pull_policy: image.pull_policy.map(str::to_string),
         command: Some(vec!["kafka-backup".to_string()]),
         args: Some(vec![
             "backup".to_string(),

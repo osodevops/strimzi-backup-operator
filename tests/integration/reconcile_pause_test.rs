@@ -8,6 +8,7 @@ use kafka_backup_operator::crd::common::{
 use kafka_backup_operator::crd::kafka_backup::KafkaBackupSpec;
 use kafka_backup_operator::crd::kafka_restore::{BackupRef, KafkaRestoreSpec};
 use kafka_backup_operator::crd::{KafkaBackup, KafkaRestore};
+use kafka_backup_operator::engine::EngineImageConfig;
 use kafka_backup_operator::metrics::prometheus::MetricsState;
 use kafka_backup_operator::reconcilers::backup::reconcile_backup;
 use kafka_backup_operator::reconcilers::restore::reconcile_restore;
@@ -173,7 +174,13 @@ fn assert_status_only(requests: &[RecordedRequest], resource_plural: &str, name:
 async fn paused_backup_does_not_create_operator_resources() {
     let backup = paused_backup();
     let requests = reconcile_paused_resource(backup.clone(), move |client, metrics| async move {
-        reconcile_backup(Arc::new(backup), client, &metrics).await
+        reconcile_backup(
+            Arc::new(backup),
+            client,
+            &metrics,
+            &EngineImageConfig::compiled_in(),
+        )
+        .await
     })
     .await;
 
@@ -184,7 +191,13 @@ async fn paused_backup_does_not_create_operator_resources() {
 async fn paused_restore_does_not_resolve_dependencies_or_create_a_job() {
     let restore = paused_restore();
     let requests = reconcile_paused_resource(restore.clone(), move |client, metrics| async move {
-        reconcile_restore(Arc::new(restore), client, &metrics).await
+        reconcile_restore(
+            Arc::new(restore),
+            client,
+            &metrics,
+            &EngineImageConfig::compiled_in(),
+        )
+        .await
     })
     .await;
 

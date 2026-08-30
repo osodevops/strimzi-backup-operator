@@ -8,13 +8,13 @@ N=${N:-2}
 operator_uninstall
 SURGE=(--set updateStrategy.type=RollingUpdate --set updateStrategy.rollingUpdate.maxSurge=1 --set updateStrategy.rollingUpdate.maxUnavailable=0)
 operator_install "$CHART_FIX" 0.2.23-a "${SURGE[@]}"; apply_cr
-wait_for 120 img_is osodevops/kafka-backup:v0.19.0 >/dev/null || fail "precondition"
+wait_for 120 img_is "$(img_old)" >/dev/null || fail "precondition"
 wait_for 20 has_holder >/dev/null || fail "no lease holder"
 evidence "start: lease $(lease_state)"
 from=0.2.23-a
 for i in $(seq 1 "$N"); do
   to=$([ "$from" = 0.2.23-a ] && echo 0.2.23-b || echo 0.2.23-a)
-  expect=$([ "${to##*-}" = a ] && echo osodevops/kafka-backup:v0.19.0 || echo osodevops/kafka-backup:v0.19.1)
+  expect=$(img_for_tag "$to")
   old_pod=$(lease_holder); apply_before=$(cronjob_apply_time); tr_before=$(lease_transitions)
   PODLOG=$(watch_pods_bg "$EVID/$SCEN/pods-$i.jsonl"); LEASELOG=$(watch_lease_bg "$EVID/$SCEN/lease-$i.jsonl")
   ( for _ in $(seq 1 40); do touch_cr; sleep 0.5; done ) & TOUCH=$!

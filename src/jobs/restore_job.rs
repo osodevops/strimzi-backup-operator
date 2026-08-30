@@ -4,8 +4,8 @@ use k8s_openapi::apimachinery::pkg::apis::meta::v1::{ObjectMeta, OwnerReference}
 use kube::ResourceExt;
 
 use crate::crd::{KafkaBackup, KafkaRestore};
+use crate::engine::JobImage;
 use crate::error::Result;
-use crate::reconcilers::DEFAULT_BACKUP_IMAGE;
 use crate::strimzi::kafka_cr::ResolvedKafkaCluster;
 use crate::strimzi::kafka_user::ResolvedAuth;
 
@@ -14,7 +14,12 @@ use super::templates::{
     build_labels, build_volumes_and_mounts, job_metrics_ports, merge_template_labels,
 };
 
-/// Build a Kubernetes Job spec for a restore operation
+/// Build a Kubernetes Job spec for a restore operation.
+///
+/// `image`: see [`build_backup_job`](super::backup_job::build_backup_job).
+// One argument over clippy's limit: every input is a distinct resolved
+// dependency and a builder struct would only move the list.
+#[allow(clippy::too_many_arguments)]
 pub fn build_restore_job(
     restore: &KafkaRestore,
     job_name: &str,
@@ -23,14 +28,10 @@ pub fn build_restore_job(
     auth: &ResolvedAuth,
     source_backup: &KafkaBackup,
     service_account_name: Option<&str>,
+    image: JobImage<'_>,
 ) -> Result<Job> {
     let cr_name = restore.name_any();
     let namespace = restore.namespace().unwrap_or_default();
-    let image = restore
-        .spec
-        .image
-        .as_deref()
-        .unwrap_or(DEFAULT_BACKUP_IMAGE);
 
     // Build labels
     let mut labels = build_labels(&cr_name, &cluster.name, "restore");
@@ -53,7 +54,8 @@ pub fn build_restore_job(
     // Build container
     let mut container = Container {
         name: "restore".to_string(),
-        image: Some(image.to_string()),
+        image: Some(image.image.to_string()),
+        image_pull_policy: image.pull_policy.map(str::to_string),
         command: Some(vec!["kafka-backup".to_string()]),
         args: Some(vec![
             "restore".to_string(),

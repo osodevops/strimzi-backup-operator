@@ -138,6 +138,8 @@ jobs:
             | tee /tmp/strimzi-backup-operator-default.yaml
           grep -q 'name: BACKUP_JOB_SERVICE_ACCOUNT' /tmp/strimzi-backup-operator-default.yaml
           grep -q 'value: "strimzi-backup-operator"' /tmp/strimzi-backup-operator-default.yaml
+          # issue #67: with backupJobs.image unset the binary's compiled-in default must win
+          ! grep -q 'name: BACKUP_JOB_IMAGE' /tmp/strimzi-backup-operator-default.yaml
           grep -q "image: ghcr.io/osodevops/strimzi-backup-operator:${APP_VERSION}" /tmp/strimzi-backup-operator-default.yaml
           # issue #62: no two operator pods may reconcile concurrently
           grep -q 'type: RollingUpdate' /tmp/strimzi-backup-operator-default.yaml
@@ -157,8 +159,14 @@ jobs:
           ! grep -q 'coordination.k8s.io' /tmp/strimzi-backup-operator-optout.yaml
           helm template strimzi-backup-operator deploy/helm/strimzi-backup-operator \
             --set backupJobs.serviceAccountName=kafka-backup-operator \
+            --set backupJobs.image=osodevops/kafka-backup:v0.19.2 \
+            --set backupJobs.imagePullPolicy=Always \
             | tee /tmp/strimzi-backup-operator-override.yaml
           grep -q 'value: "kafka-backup-operator"' /tmp/strimzi-backup-operator-override.yaml
+          grep -q 'name: BACKUP_JOB_IMAGE$' /tmp/strimzi-backup-operator-override.yaml
+          grep -q 'value: "osodevops/kafka-backup:v0.19.2"' /tmp/strimzi-backup-operator-override.yaml
+          grep -q 'name: BACKUP_JOB_IMAGE_PULL_POLICY' /tmp/strimzi-backup-operator-override.yaml
+          grep -q 'value: "Always"' /tmp/strimzi-backup-operator-override.yaml
 
   build-and-push:
     name: Build and Push Docker Image

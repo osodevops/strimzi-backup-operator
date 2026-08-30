@@ -8,6 +8,7 @@ use http_body_util::BodyExt;
 use kafka_backup_operator::crd::common::*;
 use kafka_backup_operator::crd::kafka_backup::*;
 use kafka_backup_operator::crd::KafkaBackup;
+use kafka_backup_operator::engine::EngineImageConfig;
 use kafka_backup_operator::metrics::prometheus::MetricsState;
 use kafka_backup_operator::reconcilers::backup::reconcile_backup;
 use kube::client::Body;
@@ -141,9 +142,14 @@ async fn reconcile_with_mock_api(backup: KafkaBackup) -> Vec<RecordedRequest> {
 
     let client = Client::new(mock_service, "kafka");
     let metrics = MetricsState::new();
-    reconcile_backup(Arc::new(backup), client, &metrics)
-        .await
-        .expect("reconcile should succeed");
+    reconcile_backup(
+        Arc::new(backup),
+        client,
+        &metrics,
+        &EngineImageConfig::compiled_in(),
+    )
+    .await
+    .expect("reconcile should succeed");
 
     dispatcher.await.unwrap();
     Arc::try_unwrap(recorded).unwrap().into_inner().unwrap()

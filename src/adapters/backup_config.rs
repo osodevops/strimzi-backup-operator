@@ -548,6 +548,88 @@ mod tests {
         }
     }
 
+    /// Every typed field set, so the generated YAML exercises the whole
+    /// operator → engine contract. With `WRITE_CONFIG_FIXTURES=<dir>` the
+    /// YAML is written to `<dir>/backup-full.yaml` for
+    /// `scripts/engine-config-contract.sh`, which runs it through the engine
+    /// image and fails on any "unknown config key" warning (issue #67).
+    fn kitchen_sink_backup() -> KafkaBackup {
+        let spec: KafkaBackupSpec = serde_json::from_value(serde_json::json!({
+            "strimziClusterRef": {"name": "my-cluster", "listener": "tls"},
+            "topics": {"include": ["orders.*", "payments"], "exclude": ["__.*"]},
+            "connection": {
+                "tcpKeepalive": true,
+                "keepaliveTimeSecs": 60,
+                "keepaliveIntervalSecs": 10,
+                "tcpNodelay": true
+            },
+            "consumerGroups": {"include": ["orders-.*"], "exclude": ["console-.*"]},
+            "storage": {"type": "filesystem", "filesystem": {"path": "/tmp/kafka-backup-contract"}},
+            "backup": {
+                "compression": "zstd",
+                "compressionLevel": 3,
+                "segmentSize": 268435456,
+                "segmentMaxIntervalMs": 60000,
+                "parallelism": 4,
+                "startOffset": "earliest",
+                "continuous": false,
+                "includeInternalTopics": false,
+                "internalTopics": ["__consumer_offsets"],
+                "checkpointIntervalSecs": 5,
+                "syncIntervalSecs": 30,
+                "includeOffsetHeaders": true,
+                "sourceClusterId": "my-cluster",
+                "stopAtCurrentOffsets": true,
+                "pollIntervalMs": 1000,
+                "consumerGroupSnapshot": true,
+                "config": {"fetch_max_bytes": 16777216, "segment_max_records": 2000000}
+            },
+            "metrics": {
+                "enabled": true,
+                "port": 9090,
+                "bindAddress": "0.0.0.0",
+                "path": "/metrics",
+                "keepAliveSeconds": 60,
+                "updateIntervalMs": 5000,
+                "maxPartitionLabels": 100
+            },
+            "offsetStorage": {
+                "backend": "sqlite",
+                "dbPath": "/tmp/kafka-backup-contract/offsets.db",
+                "s3Key": "state/offsets.db",
+                "syncIntervalSecs": 30
+            }
+        }))
+        .expect("kitchen-sink KafkaBackup spec must deserialise");
+        let mut backup = KafkaBackup::new("contract-backup", spec);
+        backup.metadata.namespace = Some("kafka".to_string());
+        backup
+    }
+
+    #[test]
+    fn kitchen_sink_backup_config_is_generated_and_exported() {
+        let yaml = build_backup_config_yaml(
+            &kitchen_sink_backup(),
+            &test_cluster(),
+            &None,
+            &ResolvedAuth::None,
+        )
+        .unwrap();
+        let parsed: serde_yaml::Value = serde_yaml::from_str(&yaml).unwrap();
+        assert_eq!(parsed["mode"], serde_yaml::Value::from("backup"));
+        assert_eq!(
+            parsed["backup"]["fetch_max_bytes"],
+            serde_yaml::Value::from(16777216)
+        );
+        assert!(parsed["offset_storage"].is_mapping());
+
+        if let Ok(dir) = std::env::var("WRITE_CONFIG_FIXTURES") {
+            let dir = std::path::Path::new(&dir);
+            std::fs::create_dir_all(dir).unwrap();
+            std::fs::write(dir.join("backup-full.yaml"), &yaml).unwrap();
+        }
+    }
+
     #[test]
     fn test_build_backup_config() {
         let backup = test_backup();
