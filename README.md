@@ -8,7 +8,7 @@
 
 A Kubernetes operator for **Kafka backup** and disaster recovery of Strimzi-managed Apache Kafka clusters. Provides dedicated CRDs for automated Kafka backup scheduling, point-in-time recovery, and multi-cloud storage — designed for the Strimzi ecosystem.
 
-**Current release: 0.2.23** — default job image `osodevops/kafka-backup:v0.19.1`.
+**Current release: 0.2.24** — default job image `osodevops/kafka-backup:v0.19.1`.
 
 ## Why Kafka Backup?
 
