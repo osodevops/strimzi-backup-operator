@@ -13,9 +13,10 @@ All notable changes to this project will be documented in this file.
   [docs/api-stability.md](docs/api-stability.md).
 - The Helm chart renders the CRDs as templates (`crds.install`, `crds.keep` —
   previously dead values), so `helm upgrade` applies CRD changes and
-  `helm uninstall` keeps the CRDs and your resources. Upgrading from 0.2.x
-  needs a one-off `kubectl apply --server-side -f crds.yaml` (README
-  "CRD upgrades").
+  `helm uninstall` keeps the CRDs and your resources. **Upgrading from 0.2.x
+  needs a one-off adoption** of the CRDs the old static `crds/` directory
+  installed: `helm upgrade … --take-ownership` (Helm 3.17+/4) or label and
+  annotate the two CRDs first — see README "CRD upgrades".
 - `crdgen` writes both `deploy/crds/` and the templated Helm copies; CI checks
   both for drift.
 

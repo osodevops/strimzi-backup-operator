@@ -578,8 +578,25 @@ Since 0.3.0 the chart renders the CRDs as templates (`crds.install`, default
 `v1` API version — and `crds.keep` (default `true`) marks them
 `helm.sh/resource-policy: keep` so `helm uninstall` never deletes your
 `KafkaBackup`/`KafkaRestore` resources. Installations of 0.2.x used Helm's
-static `crds/` directory, which is only applied on install: when upgrading
-from 0.2.x, apply the new CRDs once before or after `helm upgrade`:
+static `crds/` directory, which installs CRDs **without** release ownership
+metadata, so a plain `helm upgrade` to 0.3.0 stops with
+`CustomResourceDefinition "kafkabackups.kafkabackup.com" … cannot be imported
+into the current release: invalid ownership metadata`. Let Helm adopt them —
+once, on the upgrade from 0.2.x:
+
+```bash
+# Helm 3.17+ / Helm 4
+helm upgrade <release> oso/strimzi-backup-operator -n <namespace> --take-ownership
+
+# Older Helm: label the two CRDs for adoption first, then upgrade as usual
+for crd in kafkabackups.kafkabackup.com kafkarestores.kafkabackup.com; do
+  kubectl label crd "$crd" app.kubernetes.io/managed-by=Helm --overwrite
+  kubectl annotate crd "$crd" meta.helm.sh/release-name=<release> meta.helm.sh/release-namespace=<namespace> --overwrite
+done
+```
+
+Prefer not to let Helm manage the CRDs at all? Install with
+`--set crds.install=false` and apply them yourself:
 
 ```bash
 kubectl apply --server-side -f https://github.com/osodevops/strimzi-backup-operator/releases/download/v0.3.0/crds.yaml
