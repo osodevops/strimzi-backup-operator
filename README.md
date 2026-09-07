@@ -234,6 +234,45 @@ logged as warnings at job startup (kafka-backup >= v0.16.0) instead of being
 silently ignored. `spec.restore.config` works the same way for the `restore:`
 section.
 
+### Incremental backups (`spec.offsetStorage`)
+
+Adding `spec.offsetStorage` to a `KafkaBackup` turns each scheduled run into an
+**incremental** one: the operator keeps `backup_id` equal to the resource name
+so every run resumes from the offsets the previous run saved, and the engine
+merges manifests across runs.
+
+```yaml
+spec:
+  offsetStorage:
+    backend: sqlite            # the only implemented backend
+    # dbPath: /data/offsets.db # optional; see below before setting it
+    # syncIntervalSecs: 30     # how often the offset DB is synced to storage (engine >= 0.22.0)
+```
+
+How the offset database moves between runs:
+
+- **The remote copy is authoritative.** The engine uploads the SQLite offset
+  database to `<storage prefix>/<backup_id>/offsets.db` alongside the manifest,
+  and on start-up downloads it whenever the local database is empty.
+- **Job pods are ephemeral.** The operator mounts no volume for the database, so
+  it lives in the container's writable layer and disappears with the pod. That
+  is by design: every run starts from the remote copy, and losing a pod — or the
+  node — is harmless.
+- **`dbPath` on a persistent volume changes which copy wins.** If you mount a
+  PVC and point `dbPath` at it, the *local* database is no longer empty on the
+  next run, so it is used even when the remote copy is newer (for example after
+  a manual `kafka-backup prune` or a run from another pod). Leave `dbPath` unset
+  unless you understand that trade-off.
+- **`syncIntervalSecs`** is honoured by kafka-backup **0.22.0 and later**; older
+  engines use `backup.sync_interval_secs` (30s default).
+- **`s3Key` is deprecated and ignored** by kafka-backup 0.22.0 and later: the
+  remote key is always `<prefix>/<backup_id>/offsets.db`, which `kafka-backup
+  prune`, `status` and this operator's retention all rely on. The operator logs
+  a warning when it is set.
+
+See the [kafka-backup incremental backups guide](https://kafkabackup.com/guides/incremental-backups)
+for the engine-side details.
+
 ### Pausing reconciliation
 
 `KafkaBackup` and `KafkaRestore` support Strimzi's standard pause annotation.
@@ -279,6 +318,14 @@ storage:
       name: azure-credentials
       key: account-key
 ```
+
+On AKS, prefer **Workload Identity** over an account key — no secret in the
+cluster, and the Job pod authenticates with a federated token:
+`spec.storage.azure.useWorkloadIdentity: true` on the resource, the Job's
+ServiceAccount annotated with `azure.workload.identity/client-id`, and the
+Job pod labelled `azure.workload.identity/use: "true"`. A complete example,
+including the Azure-side federated credential, is in
+[`config/examples/kafka-backup-azure-workload-identity.yaml`](config/examples/kafka-backup-azure-workload-identity.yaml).
 
 ### Google Cloud Storage
 
@@ -689,6 +736,22 @@ RUST_LOG=debug cargo run
 # Install CRDs
 kubectl apply -f deploy/crds/
 ```
+
+## API stability, support and maintenance
+
+- **API versions** — `kafkabackup.com/v1alpha1` is an alpha API. The graduation
+  plan to a stable `kafkabackup.com/v1` (identical schema, `v1alpha1` served and
+  deprecated for a window), what each level guarantees, and how to migrate are in
+  [docs/api-stability.md](docs/api-stability.md).
+- **Support** — what is covered, severity levels and response targets, the
+  supported-version window and the security-fix policy are in
+  [SUPPORT.md](SUPPORT.md). Support is included with the kafka-backup
+  Enterprise licence.
+- **Security** — how to report a vulnerability and how advisories are handled:
+  [SECURITY.md](SECURITY.md).
+- **Maintenance and continuity** — the release process, who can cut a release,
+  and the source-availability commitment are in
+  [SUPPORT.md#maintenance-and-continuity](SUPPORT.md#maintenance-and-continuity).
 
 ## Contributing
 

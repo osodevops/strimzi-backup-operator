@@ -244,10 +244,13 @@ pub struct OffsetStorageSpec {
     /// Path to the local SQLite database file
     #[serde(skip_serializing_if = "Option::is_none")]
     pub db_path: Option<String>,
-    /// Remote S3 key used to sync the offset database
+    /// Deprecated — ignored by kafka-backup 0.22.0 and later, which always
+    /// stores the offset database at `<prefix>/<backup_id>/offsets.db`. The
+    /// operator logs a warning when it is set.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub s3_key: Option<String>,
-    /// Remote sync interval in seconds
+    /// How often (seconds) the offset database is synced to storage.
+    /// Honoured by kafka-backup 0.22.0 and later.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub sync_interval_secs: Option<u64>,
 }

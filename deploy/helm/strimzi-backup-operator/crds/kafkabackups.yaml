@@ -336,11 +336,11 @@ spec:
                     nullable: true
                     type: string
                   s3Key:
-                    description: Remote S3 key used to sync the offset database
+                    description: Deprecated — ignored by kafka-backup 0.22.0 and later, which always stores the offset database at `<prefix>/<backup_id>/offsets.db`. The operator logs a warning when it is set.
                     nullable: true
                     type: string
                   syncIntervalSecs:
-                    description: Remote sync interval in seconds
+                    description: How often (seconds) the offset database is synced to storage. Honoured by kafka-backup 0.22.0 and later.
                     format: uint64
                     minimum: 0.0
                     nullable: true

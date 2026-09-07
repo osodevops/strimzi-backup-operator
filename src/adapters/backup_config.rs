@@ -408,6 +408,14 @@ fn build_offset_storage_options(offset_storage: &crate::crd::common::OffsetStora
         );
     }
     if let Some(s3_key) = &offset_storage.s3_key {
+        // Deprecated: kafka-backup >= 0.22.0 ignores it (the remote key is
+        // always <prefix>/<backup_id>/offsets.db). Passed through unchanged so
+        // older engines keep their behaviour; warn so operators notice.
+        tracing::warn!(
+            s3_key = %s3_key,
+            "spec.offsetStorage.s3Key is deprecated and ignored by kafka-backup 0.22.0+; \
+             the offset database is always stored at <prefix>/<backup_id>/offsets.db"
+        );
         config.insert(
             Value::String("s3_key".to_string()),
             Value::String(s3_key.clone()),
