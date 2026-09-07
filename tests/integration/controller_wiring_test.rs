@@ -117,7 +117,7 @@ fn start_mock_with(items: Vec<Value>, hang_kafka_get: bool) -> (Client, Arc<Mute
             let (status, response) = if method == "GET" && path.ends_with("/kafkabackups") {
                 (
                     200,
-                    json!({"kind": "KafkaBackupList", "apiVersion": "kafkabackup.com/v1alpha1",
+                    json!({"kind": "KafkaBackupList", "apiVersion": "kafkabackup.com/v1",
                            "metadata": {"resourceVersion": "100"}, "items": items}),
                 )
             } else if method == "GET"
@@ -201,7 +201,7 @@ async fn backup_controller_watches_owned_jobs_and_cronjobs_by_label() {
         cronjobs.contains(selector),
         "cronjobs list query: {cronjobs}"
     );
-    assert!(list_query(&recorded, "/apis/kafkabackup.com/v1alpha1/kafkabackups").is_some());
+    assert!(list_query(&recorded, "/apis/kafkabackup.com/v1/kafkabackups").is_some());
 }
 
 #[tokio::test]

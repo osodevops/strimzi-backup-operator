@@ -1,7 +1,7 @@
 # Scheduled incremental backup used by the #62 e2e scenarios.
 # Deliberately has NO spec.image: the job image must come from the operator's
 # compiled-in default so an operator upgrade is observable on the CronJob.
-apiVersion: kafkabackup.com/v1alpha1
+apiVersion: kafkabackup.com/v1
 kind: KafkaBackup
 metadata:
   name: incr

@@ -39,7 +39,7 @@ if [[ -n "$stale" ]]; then
   die "files above pin a kafka-backup tag other than the default ${IMAGE}"
 fi
 
-if git ls-files -- 'src/crd/*.rs' 'deploy/crds/*.yaml' 'deploy/helm/*/crds/*.yaml' \
+if git ls-files -- 'src/crd/*.rs' 'deploy/crds/*.yaml' 'deploy/helm/*/templates/crds/*.yaml' \
   | xargs grep -l -E 'osodevops/kafka-backup:v[0-9]' >/dev/null 2>&1; then
   die "CRD descriptions must not embed the engine tag (issue #67); point at README \"Compatibility\" instead"
 fi

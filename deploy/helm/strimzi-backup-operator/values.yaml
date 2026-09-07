@@ -136,11 +136,14 @@ metrics:
     path: /metrics
     labels: {}
 
-# CRD installation
+# CRD installation. The CRDs are rendered as templates (templates/crds/) so
+# `helm upgrade` applies changes — e.g. new API versions. Set install: false to
+# manage them yourself (kubectl apply -f the crds.yaml release asset).
 crds:
-  # Install CRDs with the chart
+  # Render the CRDs with the chart
   install: true
-  # Keep CRDs on chart uninstall
+  # Annotate them helm.sh/resource-policy: keep so `helm uninstall` leaves the
+  # CRDs and every KafkaBackup/KafkaRestore in place
   keep: true
 
 # Leader election. Only the replica holding the Lease

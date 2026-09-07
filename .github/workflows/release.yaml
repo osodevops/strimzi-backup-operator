@@ -124,9 +124,7 @@ jobs:
 
       - name: Verify CRDs are up to date
         run: |
-          git diff --exit-code deploy/crds/ deploy/helm/strimzi-backup-operator/crds/
-          cmp deploy/crds/kafkabackups.yaml deploy/helm/strimzi-backup-operator/crds/kafkabackups.yaml
-          cmp deploy/crds/kafkarestores.yaml deploy/helm/strimzi-backup-operator/crds/kafkarestores.yaml
+          git diff --exit-code deploy/crds/ deploy/helm/strimzi-backup-operator/templates/crds/
 
       - name: Lint Helm chart
         run: helm lint deploy/helm/strimzi-backup-operator

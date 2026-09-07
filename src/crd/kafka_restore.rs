@@ -7,97 +7,119 @@ use super::common::{
     ResourceRequirementsSpec, RestoreInfo, StrimziClusterRef, TopicSelection,
 };
 
-/// KafkaRestore defines a restore operation from a KafkaBackup to a Strimzi-managed Kafka cluster.
-/// Supports point-in-time recovery, topic mapping, and consumer group offset restore.
-#[derive(CustomResource, Clone, Debug, Deserialize, Serialize, JsonSchema)]
-#[kube(
-    group = "kafkabackup.com",
-    version = "v1alpha1",
-    kind = "KafkaRestore",
-    plural = "kafkarestores",
-    shortname = "kr",
-    status = "KafkaRestoreStatus",
-    namespaced,
-    printcolumn = r#"{"name":"Cluster","type":"string","jsonPath":".spec.strimziClusterRef.name"}"#,
-    printcolumn = r#"{"name":"Backup","type":"string","jsonPath":".spec.backupRef.name"}"#,
-    printcolumn = r#"{"name":"Status","type":"string","jsonPath":".status.conditions[?(@.type==\"Ready\")].reason"}"#,
-    printcolumn = r#"{"name":"Age","type":"date","jsonPath":".metadata.creationTimestamp"}"#
-)]
-#[serde(rename_all = "camelCase")]
-pub struct KafkaRestoreSpec {
-    /// Reference to the target Strimzi Kafka cluster CR
-    pub strimzi_cluster_ref: StrimziClusterRef,
+/// The `KafkaRestore` spec is served under `v1` (stable, storage version) and
+/// `v1alpha1` (deprecated) with an identical schema; see `kafka_backup.rs`
+/// for the rationale behind the macro.
+macro_rules! kafka_restore_spec {
+    ($version:literal) => {
+        /// KafkaRestore defines a restore operation from a KafkaBackup to a Strimzi-managed Kafka cluster.
+        /// Supports point-in-time recovery, topic mapping, and consumer group offset restore.
+        #[derive(CustomResource, Clone, Debug, Deserialize, Serialize, JsonSchema)]
+        #[kube(
+            group = "kafkabackup.com",
+            version = $version,
+            kind = "KafkaRestore",
+            plural = "kafkarestores",
+            shortname = "kr",
+            status = "KafkaRestoreStatus",
+            namespaced,
+            printcolumn = r#"{"name":"Cluster","type":"string","jsonPath":".spec.strimziClusterRef.name"}"#,
+            printcolumn = r#"{"name":"Backup","type":"string","jsonPath":".spec.backupRef.name"}"#,
+            printcolumn = r#"{"name":"Status","type":"string","jsonPath":".status.conditions[?(@.type==\"Ready\")].reason"}"#,
+            printcolumn = r#"{"name":"Age","type":"date","jsonPath":".metadata.creationTimestamp"}"#
+        )]
+        #[serde(rename_all = "camelCase")]
+        pub struct KafkaRestoreSpec {
+            /// Reference to the target Strimzi Kafka cluster CR
+            pub strimzi_cluster_ref: StrimziClusterRef,
 
-    /// Authentication for the target cluster
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub authentication: Option<AuthenticationSpec>,
+            /// Authentication for the target cluster
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub authentication: Option<AuthenticationSpec>,
 
-    /// Reference to the source backup
-    pub backup_ref: BackupRef,
+            /// Reference to the source backup
+            pub backup_ref: BackupRef,
 
-    /// Topics to restore, selected by include/exclude glob (or `~`-prefixed regex)
-    /// patterns matched against source topic names in the backup. All topics are
-    /// restored when omitted. Filtering is applied before topicMapping renames.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub topics: Option<TopicSelection>,
+            /// Topics to restore, selected by include/exclude glob (or `~`-prefixed regex)
+            /// patterns matched against source topic names in the backup. All topics are
+            /// restored when omitted. Filtering is applied before topicMapping renames.
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub topics: Option<TopicSelection>,
 
-    /// Point-in-time recovery settings
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub point_in_time: Option<PointInTimeSpec>,
+            /// Point-in-time recovery settings
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub point_in_time: Option<PointInTimeSpec>,
 
-    /// Kafka connection tuning for the target cluster
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub connection: Option<KafkaConnectionSpec>,
+            /// Kafka connection tuning for the target cluster
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub connection: Option<KafkaConnectionSpec>,
 
-    /// Logging configuration for restore job pods
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub logging: Option<LoggingSpec>,
+            /// Logging configuration for restore job pods
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub logging: Option<LoggingSpec>,
 
-    /// Additional environment variables for restore job pods
-    #[schemars(schema_with = "super::common::free_form_object_array")]
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub env: Vec<serde_json::Value>,
+            /// Additional environment variables for restore job pods
+            #[schemars(schema_with = "crate::crd::common::free_form_object_array")]
+            #[serde(default, skip_serializing_if = "Vec::is_empty")]
+            pub env: Vec<serde_json::Value>,
 
-    /// Topic mapping for renaming topics during restore
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub topic_mapping: Vec<TopicMappingEntry>,
+            /// Topic mapping for renaming topics during restore
+            #[serde(default, skip_serializing_if = "Vec::is_empty")]
+            pub topic_mapping: Vec<TopicMappingEntry>,
 
-    /// Consumer group restore configuration
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub consumer_groups: Option<ConsumerGroupRestoreSpec>,
+            /// Consumer group restore configuration
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub consumer_groups: Option<ConsumerGroupRestoreSpec>,
 
-    /// Restore behaviour options
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub restore: Option<RestoreOptionsSpec>,
+            /// Restore behaviour options
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub restore: Option<RestoreOptionsSpec>,
 
-    /// Metrics configuration for restore job pods
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub metrics: Option<MetricsSpec>,
+            /// Metrics configuration for restore job pods
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub metrics: Option<MetricsSpec>,
 
-    /// Resource requirements for restore pods
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub resources: Option<ResourceRequirementsSpec>,
+            /// Resource requirements for restore pods
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub resources: Option<ResourceRequirementsSpec>,
 
-    /// Template for customizing restore pods
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub template: Option<PodTemplateSpec>,
+            /// Template for customizing restore pods
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub template: Option<PodTemplateSpec>,
 
-    /// Container image for the restore job. Defaults to the operator-wide
-    /// engine image (Helm `backupJobs.image` / `BACKUP_JOB_IMAGE`), else the
-    /// kafka-backup release compiled into this operator version — see the
-    /// README section "Compatibility".
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub image: Option<String>,
+            /// Container image for the restore job. Defaults to the operator-wide
+            /// engine image (Helm `backupJobs.image` / `BACKUP_JOB_IMAGE`), else the
+            /// kafka-backup release compiled into this operator version — see the
+            /// README section "Compatibility".
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub image: Option<String>,
 
-    /// Number of pod retries before the restore Job is marked failed
-    /// (`spec.backoffLimit` on the generated Job). Defaults to 0 so a restore
-    /// runs exactly once: restores append to or purge target topics, so a
-    /// retry of a partially completed attempt can duplicate data and must be
-    /// opted into deliberately.
-    #[schemars(range(min = 0))]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub backoff_limit: Option<i32>,
+            /// Number of pod retries before the restore Job is marked failed
+            /// (`spec.backoffLimit` on the generated Job). Defaults to 0 so a restore
+            /// runs exactly once: restores append to or purge target topics, so a
+            /// retry of a partially completed attempt can duplicate data and must be
+            /// opted into deliberately.
+            #[schemars(range(min = 0))]
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub backoff_limit: Option<i32>,
+        }
+    };
 }
+
+/// Stable API version (storage version since operator 0.3.0).
+pub(crate) mod v1 {
+    use super::*;
+    kafka_restore_spec!("v1");
+}
+
+/// Deprecated alpha API version — same schema as `v1`, served for the
+/// deprecation window only.
+pub(crate) mod v1alpha1 {
+    use super::*;
+    kafka_restore_spec!("v1alpha1");
+}
+
+pub use v1::{KafkaRestore, KafkaRestoreSpec};
 
 /// Reference to a KafkaBackup CR and optional specific backup snapshot
 #[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]

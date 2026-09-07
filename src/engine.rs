@@ -14,7 +14,7 @@ use crate::error::{Error, Result};
 /// current kafka-backup release so backup/restore job behaviour is
 /// deterministic and the image is anonymously pullable by Kubernetes.
 /// Change it with `scripts/bump-engine.sh`, never by hand.
-pub const DEFAULT_BACKUP_IMAGE: &str = "osodevops/kafka-backup:v0.19.1";
+pub const DEFAULT_BACKUP_IMAGE: &str = "osodevops/kafka-backup:v0.22.0";
 
 /// Oldest engine the generated config is known to degrade gracefully on:
 /// from kafka-backup 0.16.0 an unknown config key is warned about instead of

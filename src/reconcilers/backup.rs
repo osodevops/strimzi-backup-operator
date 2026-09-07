@@ -324,7 +324,7 @@ async fn create_or_update_config_map(
                 "kafkabackup.com/backup": owner.name_any()
             },
             "ownerReferences": [{
-                "apiVersion": "kafkabackup.com/v1alpha1",
+                "apiVersion": <KafkaBackup as kube::Resource>::api_version(&()).as_ref(),
                 "kind": "KafkaBackup",
                 "name": owner.name_any(),
                 "uid": owner.metadata.uid.as_deref().unwrap_or(""),

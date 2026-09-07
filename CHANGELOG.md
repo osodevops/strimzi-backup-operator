@@ -2,9 +2,23 @@
 
 All notable changes to this project will be documented in this file.
 
-## Unreleased
+## 0.3.0 - 2026-09-07
 
 ### Added
+
+- **Stable API `kafkabackup.com/v1`** for `KafkaBackup` and `KafkaRestore` —
+  identical schema to `v1alpha1`, now the storage version. No conversion
+  webhook is needed; existing objects are read back as `v1` unchanged. The
+  guarantees, graduation criteria and deprecation window are in
+  [docs/api-stability.md](docs/api-stability.md).
+- The Helm chart renders the CRDs as templates (`crds.install`, `crds.keep` —
+  previously dead values), so `helm upgrade` applies CRD changes and
+  `helm uninstall` keeps the CRDs and your resources. **Upgrading from 0.2.x
+  needs a one-off adoption** of the CRDs the old static `crds/` directory
+  installed: `helm upgrade … --take-ownership` (Helm 3.17+/4) or label and
+  annotate the two CRDs first — see README "CRD upgrades".
+- `crdgen` writes both `deploy/crds/` and the templated Helm copies; CI checks
+  both for drift.
 
 - README section **"Incremental backups (`spec.offsetStorage`)"** — where the
   offset database lives in the Job model (ephemeral; the remote copy at
@@ -20,8 +34,27 @@ All notable changes to this project will be documented in this file.
   supported-version window, security-fix policy, maintenance and continuity) and
   `SECURITY.md` (coordinated disclosure). Linked from a new README section.
 
+### Changed
+
+- Update the default job image to `osodevops/kafka-backup:v0.22.0` (was
+  `osodevops/kafka-backup:v0.19.1`). **Existing archives are not affected**:
+  the manifest gains additive, optional fields only (`pruned` ranges, per-segment
+  `sha256`/`uploaded_at`, `missing_topics`) and this operator's retention reader
+  ignores unknown fields. What the new engine brings to operator users: safe
+  segment-level retention (`kafka-backup prune`, `backup.retention` — set via
+  `spec.backup.config`), `backup.on_missing_topic: warn` (via
+  `spec.backup.config`), `spec.offsetStorage.syncIntervalSecs` is now honoured,
+  and http:// S3 endpoints no longer need `AWS_ALLOW_HTTP`. Restore reports gain
+  record-filter counters (used by the enterprise erasure feature). Pin
+  `spec.image` to keep an older engine.
+- Owner references on generated Jobs, CronJobs and ConfigMaps now use `kafkabackup.com/v1`.
+
 ### Deprecated
 
+- **`kafkabackup.com/v1alpha1`** — still served with the same schema, but every
+  request receives a `deprecationWarning`. It will be removed no earlier than
+  operator 0.5.0 or six months after 0.3.0, whichever is later. Migrate by
+  changing `apiVersion` to `kafkabackup.com/v1`; nothing else changes.
 - `spec.offsetStorage.s3Key` — ignored by kafka-backup 0.22.0 and later (the
   remote key is always `<prefix>/<backup_id>/offsets.db`); the operator logs a
   warning when it is set. Still passed through for older engines

@@ -539,4 +539,55 @@ mod tests {
 
         assert!(store.list("daily-backup-1/").await.unwrap().is_empty());
     }
+
+    /// A manifest exactly as kafka-backup 0.22.0 writes it (pruned ranges,
+    /// per-segment sha256/uploaded_at, missing_topics, record-filter fields on
+    /// reports are all additive). The retention reader must ignore what it does
+    /// not know and still read backup_id/created_at/sizes.
+    #[test]
+    fn parses_a_kafka_backup_0_22_manifest() {
+        let json = r#"{
+          "backup_id": "daily-2026-09-07",
+          "created_at": 1757203200000,
+          "source_cluster_id": "abc",
+          "source_brokers": ["kafka:9092"],
+          "compression": "zstd",
+          "missing_topics": ["ghost"],
+          "topics": [{
+            "name": "orders",
+            "original_partition_count": 1,
+            "partitions": [{
+              "partition_id": 0,
+              "segments": [{
+                "key": "daily-2026-09-07/topics/orders/partition=0/segment-00000000000000000010.bin.zst",
+                "start_offset": 10, "end_offset": 19,
+                "start_timestamp": 1757203100000, "end_timestamp": 1757203199000,
+                "record_count": 10, "uncompressed_size": 4096, "compressed_size": 1234,
+                "sha256": "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+                "uploaded_at": 1757203200500
+              }],
+              "gaps": [],
+              "pruned": [{
+                "start_offset": 0, "end_offset": 9, "segments": 1, "bytes": 999,
+                "pruned_at": 1757203000000, "cutoff_timestamp": 1757200000000, "reason": "retention"
+              }]
+            }]
+          }]
+        }"#;
+        let manifest: StoredBackupManifest =
+            serde_json::from_str(json).expect("0.22.0 manifest parses");
+        assert_eq!(manifest.backup_id, "daily-2026-09-07");
+        assert_eq!(manifest.created_at, 1_757_203_200_000);
+        let bytes: u64 = manifest
+            .topics
+            .iter()
+            .flat_map(|t| t.partitions.iter())
+            .flat_map(|p| p.segments.iter())
+            .map(|s| s.compressed_size)
+            .sum();
+        assert_eq!(
+            bytes, 1234,
+            "pruned bytes are not counted; live segments are"
+        );
+    }
 }

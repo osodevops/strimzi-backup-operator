@@ -187,7 +187,7 @@ jobs:
         run: cargo run --release --bin crdgen
 
       - name: Verify CRDs are up to date
-        run: git diff --exit-code deploy/crds/
+        run: git diff --exit-code deploy/crds/ deploy/helm/strimzi-backup-operator/templates/crds/
 
   # Operator <-> engine compatibility (issue #67, README "Compatibility"):
   # the compiled-in default engine image must be pullable, and every config
