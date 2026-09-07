@@ -47,8 +47,8 @@ version in production.
 - Backup, restore, PITR, incremental (`offsetStorage`), scheduling, retention,
   engine pinning and the `EngineVersionSupported` guard are covered by the
   unit, integration and minikube end-to-end suites (`scripts/e2e/`).
-- `<<N>>` production installations ran the `v1alpha1` API across at least two
-  operator minor releases without a schema change.
+- The `v1alpha1` API was served unchanged across two operator minor release
+  lines (0.1.x and 0.2.x, from 0.1.0 to 0.2.25) before graduation.
 
 ## Deprecation and removal of `v1alpha1`
 
