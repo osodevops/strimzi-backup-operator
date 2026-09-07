@@ -13,3 +13,10 @@ commandOverride:
   - sh
   - -c
   - "echo 'chart-testing mode' && sleep 30"
+
+# chart-testing installs the chart once per ci/*-values.yaml into the same
+# cluster under different release names; kept CRDs from the previous release
+# would fail the next install's Helm ownership check (templated CRDs since
+# 0.3.0). CI only — the chart default stays crds.keep=true.
+crds:
+  keep: false

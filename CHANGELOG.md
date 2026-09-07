@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.3.1 - 2026-09-07
+
+### Fixed
+
+- Helm chart: the chart-testing values (`ci/*-values.yaml`) set `crds.keep: false`
+  so `ct install` can install the chart more than once into one cluster — the
+  kept CRDs from the previous release failed Helm's ownership check on the next
+  install and blocked publishing the 0.3.0 chart. CI-only; the chart default
+  stays `crds.keep: true`. First chart published to the Helm repository with the
+  templated CRDs.
+
 ## 0.3.0 - 2026-09-07
 
 ### Added
