@@ -36,6 +36,17 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- Update the default job image to `osodevops/kafka-backup:v0.22.0` (was
+  `osodevops/kafka-backup:v0.19.1`). **Existing archives are not affected**:
+  the manifest gains additive, optional fields only (`pruned` ranges, per-segment
+  `sha256`/`uploaded_at`, `missing_topics`) and this operator's retention reader
+  ignores unknown fields. What the new engine brings to operator users: safe
+  segment-level retention (`kafka-backup prune`, `backup.retention` — set via
+  `spec.backup.config`), `backup.on_missing_topic: warn` (via
+  `spec.backup.config`), `spec.offsetStorage.syncIntervalSecs` is now honoured,
+  and http:// S3 endpoints no longer need `AWS_ALLOW_HTTP`. Restore reports gain
+  record-filter counters (used by the enterprise erasure feature). Pin
+  `spec.image` to keep an older engine.
 - Owner references on generated Jobs, CronJobs and ConfigMaps now use `kafkabackup.com/v1`.
 
 ### Deprecated

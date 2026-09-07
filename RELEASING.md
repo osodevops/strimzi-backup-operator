@@ -49,6 +49,11 @@ If CRD doc-comments changed: `cargo run --bin crdgen` — it writes both
 `deploy/helm/strimzi-backup-operator/templates/crds/` (CI fails if either is
 stale).
 
+If the CRD API versions or the chart's CRD handling changed, run
+`scripts/api-version-upgrade-check.sh` (kind + helm): it installs the previous
+release's chart, upgrades to the working tree with `--take-ownership`, and checks
+the served/storage versions, the deprecation warning, and `helm uninstall`.
+
 Local gate, same checks as CI:
 
 ```bash
