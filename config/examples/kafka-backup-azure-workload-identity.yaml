@@ -1,0 +1,81 @@
+# KafkaBackup to Azure Blob Storage on AKS using Workload Identity — no storage
+# credentials in the cluster. The backup Job pod authenticates with a federated
+# token that the AKS Workload Identity webhook projects into the pod.
+#
+# One-time Azure setup (managed identity + federated credential bound to the
+# Job's ServiceAccount; the identity needs "Storage Blob Data Contributor" on
+# the container or account):
+#
+#   AKS_OIDC_ISSUER=$(az aks show -g <rg> -n <cluster> --query oidcIssuerProfile.issuerUrl -o tsv)
+#   az identity create -g <rg> -n kafka-backup
+#   az identity federated-credential create \
+#     --name kafka-backup --identity-name kafka-backup -g <rg> \
+#     --issuer "$AKS_OIDC_ISSUER" \
+#     --subject system:serviceaccount:kafka:kafka-backup-jobs \
+#     --audiences api://AzureADTokenExchange
+#   az role assignment create --role "Storage Blob Data Contributor" \
+#     --assignee "$(az identity show -g <rg> -n kafka-backup --query principalId -o tsv)" \
+#     --scope /subscriptions/<sub>/resourceGroups/<rg>/providers/Microsoft.Storage/storageAccounts/<account>/blobServices/default/containers/kafka-backups
+#
+# The subject must match the ServiceAccount below exactly:
+# system:serviceaccount:<namespace>:<serviceAccountName>.
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: kafka-backup-jobs
+  namespace: kafka
+  annotations:
+    # Client ID of the managed identity / app registration created above.
+    azure.workload.identity/client-id: "<MANAGED_IDENTITY_CLIENT_ID>"
+---
+apiVersion: kafkabackup.com/v1alpha1
+kind: KafkaBackup
+metadata:
+  name: daily-backup-azure
+  namespace: kafka
+spec:
+  strimziClusterRef:
+    name: my-kafka-cluster
+
+  authentication:
+    type: tls
+    kafkaUserRef:
+      name: backup-service-account
+
+  topics:
+    include:
+      - "orders-*"
+      - "payments"
+
+  storage:
+    type: azure
+    azure:
+      storageAccount: mybackupstorage
+      container: kafka-backups
+      prefix: strimzi/my-kafka-cluster/
+      # Federated-token authentication. The webhook injects AZURE_CLIENT_ID,
+      # AZURE_TENANT_ID and AZURE_FEDERATED_TOKEN_FILE into the Job pod; the
+      # engine uses them (clientId/tenantId here override the injected values).
+      useWorkloadIdentity: true
+      # clientId: "<MANAGED_IDENTITY_CLIENT_ID>"   # optional override
+      # tenantId: "<TENANT_ID>"                     # optional override
+
+  template:
+    pod:
+      # Run the Job under the annotated ServiceAccount...
+      serviceAccountName: kafka-backup-jobs
+      metadata:
+        labels:
+          # ...and opt the pod into the Workload Identity webhook, which
+          # projects the token and sets the AZURE_* environment variables.
+          azure.workload.identity/use: "true"
+
+  schedule:
+    cron: "0 2 * * *"
+
+  backup:
+    compression: zstd
+
+  retention:
+    maxBackups: 14

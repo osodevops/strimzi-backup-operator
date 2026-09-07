@@ -2,6 +2,31 @@
 
 All notable changes to this project will be documented in this file.
 
+## Unreleased
+
+### Added
+
+- README section **"Incremental backups (`spec.offsetStorage`)"** — where the
+  offset database lives in the Job model (ephemeral; the remote copy at
+  `<prefix>/<backup_id>/offsets.db` is authoritative), the `dbPath`-on-a-PVC
+  caveat, and which engine honours `syncIntervalSecs`
+  ([#68](https://github.com/osodevops/strimzi-backup-operator/issues/68)).
+- `config/examples/kafka-backup-azure-workload-identity.yaml` — end-to-end AKS
+  Workload Identity example (federated credential, annotated ServiceAccount,
+  `azure.workload.identity/use` pod label via `spec.template.pod.metadata`,
+  `useWorkloadIdentity: true`), linked from the README Azure section.
+- `docs/api-stability.md` (API levels, the `v1alpha1` → `v1` graduation plan and
+  compatibility contract), `SUPPORT.md` (support scope, severity targets,
+  supported-version window, security-fix policy, maintenance and continuity) and
+  `SECURITY.md` (coordinated disclosure). Linked from a new README section.
+
+### Deprecated
+
+- `spec.offsetStorage.s3Key` — ignored by kafka-backup 0.22.0 and later (the
+  remote key is always `<prefix>/<backup_id>/offsets.db`); the operator logs a
+  warning when it is set. Still passed through for older engines
+  ([#68](https://github.com/osodevops/strimzi-backup-operator/issues/68)).
+
 ## 0.2.25 - 2026-08-30
 
 ### Added
