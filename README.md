@@ -8,7 +8,7 @@
 
 A Kubernetes operator for **Kafka backup** and disaster recovery of Strimzi-managed Apache Kafka clusters. Provides dedicated CRDs for automated Kafka backup scheduling, point-in-time recovery, and multi-cloud storage — designed for the Strimzi ecosystem.
 
-**Current release: 0.3.0** — default job image `osodevops/kafka-backup:v0.22.0`.
+**Current release: 0.3.1** — default job image `osodevops/kafka-backup:v0.22.0`.
 
 ## Why Kafka Backup?
 
@@ -512,7 +512,7 @@ compiled-in default. The image a Job actually used is recorded in
 
 | Operator | Default engine | Minimum engine | Notes |
 |----------|----------------|----------------|-------|
-| 0.3.0 | v0.22.0 | v0.16.0 | `kafkabackup.com/v1` API, templated CRDs; engine 0.22: `prune`/`backup.retention`, `on_missing_topic`, `syncIntervalSecs` honoured |
+| 0.3.0 – 0.3.1 | v0.22.0 | v0.16.0 | `kafkabackup.com/v1` API, templated CRDs; engine 0.22: `prune`/`backup.retention`, `on_missing_topic`, `syncIntervalSecs` honoured |
 | 0.2.25 | v0.19.1 | v0.16.0 | `backupJobs.image`, `EngineVersionSupported` condition, `status.*.image` |
 | 0.2.22 – 0.2.24 | v0.19.1 | v0.16.0 | |
 | 0.2.21 | v0.19.0 | v0.16.0 | `stripOffsetHeaders` needs ≥ v0.19.0 |
