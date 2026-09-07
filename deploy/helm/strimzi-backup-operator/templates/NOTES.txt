@@ -7,12 +7,12 @@ To verify the installation, run:
   kubectl get pods -l "app.kubernetes.io/name={{ include "strimzi-backup-operator.name" . }},app.kubernetes.io/instance={{ .Release.Name }}"
 
 The operator is now watching for the following custom resources:
-  - KafkaBackup  (kafkabackup.com/v1alpha1)
-  - KafkaRestore (kafkabackup.com/v1alpha1)
+  - KafkaBackup  (kafkabackup.com/v1)
+  - KafkaRestore (kafkabackup.com/v1)
 
 To create a backup, apply a KafkaBackup resource:
 
-  apiVersion: kafkabackup.com/v1alpha1
+  apiVersion: kafkabackup.com/v1
   kind: KafkaBackup
   metadata:
     name: my-cluster-backup
@@ -29,7 +29,7 @@ To create a backup, apply a KafkaBackup resource:
 
 To restore from a backup:
 
-  apiVersion: kafkabackup.com/v1alpha1
+  apiVersion: kafkabackup.com/v1
   kind: KafkaRestore
   metadata:
     name: my-cluster-restore

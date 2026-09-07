@@ -8,98 +8,123 @@ use super::common::{
     ResourceRequirementsSpec, StorageSpec, StrimziClusterRef, TopicSelection,
 };
 
-/// KafkaBackup defines a backup configuration for a Strimzi-managed Kafka cluster.
-/// The operator creates Kubernetes Jobs that run the kafka-backup CLI to perform backups.
-#[derive(CustomResource, Clone, Debug, Deserialize, Serialize, JsonSchema)]
-#[kube(
-    group = "kafkabackup.com",
-    version = "v1alpha1",
-    kind = "KafkaBackup",
-    plural = "kafkabackups",
-    shortname = "kb",
-    status = "KafkaBackupStatus",
-    namespaced,
-    printcolumn = r#"{"name":"Cluster","type":"string","jsonPath":".spec.strimziClusterRef.name"}"#,
-    printcolumn = r#"{"name":"Schedule","type":"string","jsonPath":".spec.schedule.cron"}"#,
-    printcolumn = r#"{"name":"Last Backup","type":"date","jsonPath":".status.lastBackup.completionTime"}"#,
-    printcolumn = r#"{"name":"Ready","type":"string","jsonPath":".status.conditions[?(@.type==\"Ready\")].status"}"#,
-    printcolumn = r#"{"name":"Age","type":"date","jsonPath":".metadata.creationTimestamp"}"#
-)]
-#[serde(rename_all = "camelCase")]
-pub struct KafkaBackupSpec {
-    /// Reference to the Strimzi Kafka cluster CR
-    pub strimzi_cluster_ref: StrimziClusterRef,
+/// The `KafkaBackup` spec is served under two API versions with an
+/// **identical** schema — `v1` (stable, storage version) and `v1alpha1`
+/// (deprecated, kept served for the window documented in
+/// `docs/api-stability.md`). One macro emits the struct for each version so
+/// the two can never drift; the rest of the crate uses the `v1` types via the
+/// re-exports below.
+macro_rules! kafka_backup_spec {
+    ($version:literal) => {
+        /// KafkaBackup defines a backup configuration for a Strimzi-managed Kafka cluster.
+        /// The operator creates Kubernetes Jobs that run the kafka-backup CLI to perform backups.
+        #[derive(CustomResource, Clone, Debug, Deserialize, Serialize, JsonSchema)]
+        #[kube(
+            group = "kafkabackup.com",
+            version = $version,
+            kind = "KafkaBackup",
+            plural = "kafkabackups",
+            shortname = "kb",
+            status = "KafkaBackupStatus",
+            namespaced,
+            printcolumn = r#"{"name":"Cluster","type":"string","jsonPath":".spec.strimziClusterRef.name"}"#,
+            printcolumn = r#"{"name":"Schedule","type":"string","jsonPath":".spec.schedule.cron"}"#,
+            printcolumn = r#"{"name":"Last Backup","type":"date","jsonPath":".status.lastBackup.completionTime"}"#,
+            printcolumn = r#"{"name":"Ready","type":"string","jsonPath":".status.conditions[?(@.type==\"Ready\")].status"}"#,
+            printcolumn = r#"{"name":"Age","type":"date","jsonPath":".metadata.creationTimestamp"}"#
+        )]
+        #[serde(rename_all = "camelCase")]
+        pub struct KafkaBackupSpec {
+            /// Reference to the Strimzi Kafka cluster CR
+            pub strimzi_cluster_ref: StrimziClusterRef,
 
-    /// Authentication configuration for connecting to the Kafka cluster
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub authentication: Option<AuthenticationSpec>,
+            /// Authentication configuration for connecting to the Kafka cluster
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub authentication: Option<AuthenticationSpec>,
 
-    /// Topic selection with include/exclude glob patterns
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub topics: Option<TopicSelection>,
+            /// Topic selection with include/exclude glob patterns
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub topics: Option<TopicSelection>,
 
-    /// Kafka connection tuning for the source cluster
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub connection: Option<KafkaConnectionSpec>,
+            /// Kafka connection tuning for the source cluster
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub connection: Option<KafkaConnectionSpec>,
 
-    /// Consumer group selection
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub consumer_groups: Option<ConsumerGroupSelection>,
+            /// Consumer group selection
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub consumer_groups: Option<ConsumerGroupSelection>,
 
-    /// Logging configuration for backup job pods
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub logging: Option<LoggingSpec>,
+            /// Logging configuration for backup job pods
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub logging: Option<LoggingSpec>,
 
-    /// Additional environment variables for backup job pods
-    #[schemars(schema_with = "super::common::free_form_object_array")]
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub env: Vec<serde_json::Value>,
+            /// Additional environment variables for backup job pods
+            #[schemars(schema_with = "crate::crd::common::free_form_object_array")]
+            #[serde(default, skip_serializing_if = "Vec::is_empty")]
+            pub env: Vec<serde_json::Value>,
 
-    /// Storage destination configuration
-    pub storage: StorageSpec,
+            /// Storage destination configuration
+            pub storage: StorageSpec,
 
-    /// Backup options (compression, parallelism, checkpointing)
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub backup: Option<BackupOptionsSpec>,
+            /// Backup options (compression, parallelism, checkpointing)
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub backup: Option<BackupOptionsSpec>,
 
-    /// Metrics configuration for backup job pods
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub metrics: Option<MetricsSpec>,
+            /// Metrics configuration for backup job pods
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub metrics: Option<MetricsSpec>,
 
-    /// Offset storage configuration for continuous backup progress
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub offset_storage: Option<OffsetStorageSpec>,
+            /// Offset storage configuration for continuous backup progress
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub offset_storage: Option<OffsetStorageSpec>,
 
-    /// Cron schedule configuration
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub schedule: Option<ScheduleSpec>,
+            /// Cron schedule configuration
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub schedule: Option<ScheduleSpec>,
 
-    /// Retention policy for managing old backups
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub retention: Option<RetentionSpec>,
+            /// Retention policy for managing old backups
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub retention: Option<RetentionSpec>,
 
-    /// Resource requirements for backup pods
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub resources: Option<ResourceRequirementsSpec>,
+            /// Resource requirements for backup pods
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub resources: Option<ResourceRequirementsSpec>,
 
-    /// Template for customizing backup pods
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub template: Option<PodTemplateSpec>,
+            /// Template for customizing backup pods
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub template: Option<PodTemplateSpec>,
 
-    /// Container image for the backup job. Defaults to the operator-wide
-    /// engine image (Helm `backupJobs.image` / `BACKUP_JOB_IMAGE`), else the
-    /// kafka-backup release compiled into this operator version — see the
-    /// README section "Compatibility".
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub image: Option<String>,
+            /// Container image for the backup job. Defaults to the operator-wide
+            /// engine image (Helm `backupJobs.image` / `BACKUP_JOB_IMAGE`), else the
+            /// kafka-backup release compiled into this operator version — see the
+            /// README section "Compatibility".
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub image: Option<String>,
 
-    /// Number of pod retries before a backup Job is marked failed
-    /// (`spec.backoffLimit` on generated Jobs, including scheduled CronJob
-    /// runs). Defaults to 3.
-    #[schemars(range(min = 0))]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub backoff_limit: Option<i32>,
+            /// Number of pod retries before a backup Job is marked failed
+            /// (`spec.backoffLimit` on generated Jobs, including scheduled CronJob
+            /// runs). Defaults to 3.
+            #[schemars(range(min = 0))]
+            #[serde(skip_serializing_if = "Option::is_none")]
+            pub backoff_limit: Option<i32>,
+        }
+    };
 }
+
+/// Stable API version (storage version since operator 0.3.0).
+pub(crate) mod v1 {
+    use super::*;
+    kafka_backup_spec!("v1");
+}
+
+/// Deprecated alpha API version — same schema as `v1`, served for the
+/// deprecation window only.
+pub(crate) mod v1alpha1 {
+    use super::*;
+    kafka_backup_spec!("v1alpha1");
+}
+
+pub use v1::{KafkaBackup, KafkaBackupSpec};
 
 /// Backup-specific options
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
@@ -257,18 +282,41 @@ pub struct KafkaBackupStatus {
 mod tests {
     use kube::CustomResourceExt;
 
-    use super::KafkaBackup;
+    #[test]
+    fn crd_does_not_expose_unsupported_encryption_in_any_version() {
+        for crd in [
+            serde_json::to_value(super::v1::KafkaBackup::crd()).expect("v1 CRD serializes"),
+            serde_json::to_value(super::v1alpha1::KafkaBackup::crd())
+                .expect("v1alpha1 CRD serializes"),
+        ] {
+            let versions = crd["spec"]["versions"].as_array().expect("versions");
+            assert_eq!(versions.len(), 1, "each derive emits exactly one version");
+            let encryption = versions[0].pointer(
+                "/schema/openAPIV3Schema/properties/spec/properties/backup/properties/encryption",
+            );
+            assert!(
+                encryption.is_none(),
+                "the OSS Strimzi operator must not expose enterprise-only encryption"
+            );
+        }
+    }
 
     #[test]
-    fn crd_does_not_expose_unsupported_encryption() {
-        let crd = serde_json::to_value(KafkaBackup::crd()).expect("CRD should serialize");
-        let encryption = crd.pointer(
-            "/spec/versions/0/schema/openAPIV3Schema/properties/spec/properties/backup/properties/encryption",
+    fn v1_and_v1alpha1_schemas_are_identical() {
+        use kube::Resource;
+        assert_eq!(
+            super::v1::KafkaBackup::api_version(&()),
+            "kafkabackup.com/v1"
         );
-
-        assert!(
-            encryption.is_none(),
-            "the OSS Strimzi operator must not expose enterprise-only encryption"
+        assert_eq!(
+            super::v1alpha1::KafkaBackup::api_version(&()),
+            "kafkabackup.com/v1alpha1"
+        );
+        let v1 = serde_json::to_value(super::v1::KafkaBackup::crd()).unwrap();
+        let v1alpha1 = serde_json::to_value(super::v1alpha1::KafkaBackup::crd()).unwrap();
+        assert_eq!(
+            v1["spec"]["versions"][0]["schema"],
+            v1alpha1["spec"]["versions"][0]["schema"]
         );
     }
 }

@@ -592,7 +592,7 @@ fn test_backup_cronjob_carries_owner_reference_and_owned_selector_label() {
     assert_eq!(labels.get(key).map(String::as_str), Some(value));
 
     let owner = &cronjob.metadata.owner_references.as_ref().unwrap()[0];
-    assert_eq!(owner.api_version, "kafkabackup.com/v1alpha1");
+    assert_eq!(owner.api_version, "kafkabackup.com/v1");
     assert_eq!(owner.kind, "KafkaBackup");
     assert_eq!(owner.name, "daily-backup");
     assert_eq!(owner.uid, backup.metadata.uid.clone().unwrap());

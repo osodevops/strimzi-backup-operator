@@ -1,4 +1,5 @@
 pub mod common;
+pub mod generate;
 pub mod kafka_backup;
 pub mod kafka_restore;
 

@@ -8,7 +8,7 @@
 
 A Kubernetes operator for **Kafka backup** and disaster recovery of Strimzi-managed Apache Kafka clusters. Provides dedicated CRDs for automated Kafka backup scheduling, point-in-time recovery, and multi-cloud storage — designed for the Strimzi ecosystem.
 
-**Current release: 0.2.25** — default job image `osodevops/kafka-backup:v0.19.1`.
+**Current release: 0.3.0** — default job image `osodevops/kafka-backup:v0.19.1`.
 
 ## Why Kafka Backup?
 
@@ -91,7 +91,7 @@ helm install strimzi-backup-operator oso-devops/strimzi-backup-operator \
 ### Create a Backup
 
 ```yaml
-apiVersion: kafkabackup.com/v1alpha1
+apiVersion: kafkabackup.com/v1
 kind: KafkaBackup
 metadata:
   name: my-cluster-backup
@@ -141,7 +141,7 @@ spec:
 ### Restore from a Backup
 
 ```yaml
-apiVersion: kafkabackup.com/v1alpha1
+apiVersion: kafkabackup.com/v1
 kind: KafkaRestore
 metadata:
   name: my-cluster-restore
@@ -190,8 +190,8 @@ Known limitation: duplicate header keys on one record are collapsed to the last 
 
 | CRD | Short Name | API Group | Description |
 |-----|-----------|-----------|-------------|
-| `KafkaBackup` | `kb` | `kafkabackup.com/v1alpha1` | Defines a backup configuration with scheduling, retention, and storage |
-| `KafkaRestore` | `kr` | `kafkabackup.com/v1alpha1` | Defines a restore operation with PITR, topic mapping, and consumer group restore |
+| `KafkaBackup` | `kb` | `kafkabackup.com/v1` (`v1alpha1` served, deprecated) | Defines a backup configuration with scheduling, retention, and storage |
+| `KafkaRestore` | `kr` | `kafkabackup.com/v1` (`v1alpha1` served, deprecated) | Defines a restore operation with PITR, topic mapping, and consumer group restore |
 
 ### Engine image (`spec.image`)
 
@@ -571,6 +571,23 @@ controller re-applies the desired CronJob, and it reconciles every resource
 again 5s and 60s after start, so a stale CronJob is corrected within seconds
 even if the mechanisms above are disabled.
 
+### CRD upgrades
+
+Since 0.3.0 the chart renders the CRDs as templates (`crds.install`, default
+`true`), so `helm upgrade` applies CRD changes — including the addition of the
+`v1` API version — and `crds.keep` (default `true`) marks them
+`helm.sh/resource-policy: keep` so `helm uninstall` never deletes your
+`KafkaBackup`/`KafkaRestore` resources. Installations of 0.2.x used Helm's
+static `crds/` directory, which is only applied on install: when upgrading
+from 0.2.x, apply the new CRDs once before or after `helm upgrade`:
+
+```bash
+kubectl apply --server-side -f https://github.com/osodevops/strimzi-backup-operator/releases/download/v0.3.0/crds.yaml
+```
+
+Existing `v1alpha1` objects keep working; they are read back as `v1` (identical
+schema) and every `v1alpha1` request prints a deprecation warning.
+
 ## Logging
 
 The operator deployment and the backup/restore job pods are configured separately.
@@ -586,7 +603,7 @@ logging:
 Configure `kafka-backup` job logging on each `KafkaBackup` or `KafkaRestore`:
 
 ```yaml
-apiVersion: kafkabackup.com/v1alpha1
+apiVersion: kafkabackup.com/v1
 kind: KafkaBackup
 metadata:
   name: debug-backup
@@ -739,10 +756,10 @@ kubectl apply -f deploy/crds/
 
 ## API stability, support and maintenance
 
-- **API versions** — `kafkabackup.com/v1alpha1` is an alpha API. The graduation
-  plan to a stable `kafkabackup.com/v1` (identical schema, `v1alpha1` served and
-  deprecated for a window), what each level guarantees, and how to migrate are in
-  [docs/api-stability.md](docs/api-stability.md).
+- **API versions** — `kafkabackup.com/v1` is the stable API (operator 0.3.0+);
+  `v1alpha1` is still served with an identical schema but deprecated. What `v1`
+  guarantees, the deprecation window for `v1alpha1`, and how to migrate
+  (change `apiVersion`, nothing else) are in [docs/api-stability.md](docs/api-stability.md).
 - **Support** — what is covered, severity levels and response targets, the
   supported-version window and the security-fix policy are in
   [SUPPORT.md](SUPPORT.md). Support is included with the kafka-backup

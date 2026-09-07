@@ -29,7 +29,7 @@ metadata:
     # Client ID of the managed identity / app registration created above.
     azure.workload.identity/client-id: "<MANAGED_IDENTITY_CLIENT_ID>"
 ---
-apiVersion: kafkabackup.com/v1alpha1
+apiVersion: kafkabackup.com/v1
 kind: KafkaBackup
 metadata:
   name: daily-backup-azure

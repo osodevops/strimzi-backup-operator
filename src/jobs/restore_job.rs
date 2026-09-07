@@ -87,7 +87,7 @@ pub fn build_restore_job(
 
     // Owner reference for garbage collection
     let owner_ref = OwnerReference {
-        api_version: "kafkabackup.com/v1alpha1".to_string(),
+        api_version: <KafkaRestore as kube::Resource>::api_version(&()).to_string(),
         kind: "KafkaRestore".to_string(),
         name: cr_name.clone(),
         uid: restore.metadata.uid.clone().unwrap_or_default(),
