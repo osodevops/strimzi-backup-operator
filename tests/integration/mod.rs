@@ -7,4 +7,5 @@ mod leader_election_test;
 mod reconcile_backup_test;
 mod reconcile_pause_test;
 mod restore_test;
+mod storage_tls_test;
 mod strimzi_api_test;

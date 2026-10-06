@@ -7,12 +7,14 @@ use object_store::azure::MicrosoftAzureBuilder;
 use object_store::gcp::GoogleCloudStorageBuilder;
 use object_store::local::LocalFileSystem;
 use object_store::path::Path;
-use object_store::ObjectStore;
+use object_store::{Certificate, ClientOptions, ObjectStore};
 use serde::Deserialize;
 use tracing::{debug, info, warn};
 
 use crate::adapters::secrets::{extract_secret_data, get_secret};
-use crate::crd::common::{BackupHistoryEntry, BackupStatus, StorageSpec, StorageType};
+use crate::crd::common::{
+    BackupHistoryEntry, BackupStatus, CertSecretSource, StorageSpec, StorageType,
+};
 use crate::error::{Error, Result};
 
 struct BackupObjectStore {
@@ -191,6 +193,61 @@ async fn build_store(
     }
 }
 
+/// Client options trusting `spec.storage.tls.trustedCertificates` in addition
+/// to the system roots.
+async fn client_options(
+    client: &kube::Client,
+    namespace: &str,
+    storage: &StorageSpec,
+) -> Result<ClientOptions> {
+    let mut options = ClientOptions::new();
+    let Some(tls) = &storage.tls else {
+        return Ok(options);
+    };
+    for source in &tls.trusted_certificates {
+        let secret = get_secret(client, &source.secret_name, namespace).await?;
+        let pem = extract_secret_data(&secret, &source.certificate)?;
+        for certificate in parse_trusted_certificates(source, &pem)? {
+            options = options.with_root_certificate(certificate);
+        }
+    }
+    Ok(options)
+}
+
+fn parse_trusted_certificates(source: &CertSecretSource, pem: &str) -> Result<Vec<Certificate>> {
+    let invalid = |reason: String| {
+        Error::InvalidConfig(format!(
+            "spec.storage.tls.trustedCertificates: Secret '{}' key '{}' {reason}",
+            source.secret_name, source.certificate
+        ))
+    };
+    let certificates = Certificate::from_pem_bundle(pem.as_bytes())
+        .map_err(|e| invalid(format!("is not a valid PEM certificate bundle: {e}")))?;
+    if certificates.is_empty() {
+        return Err(invalid("contains no PEM certificate".to_string()));
+    }
+    Ok(certificates)
+}
+
+/// `AmazonS3Builder::from_env()` with the given client options.
+///
+/// `with_client_options` replaces the options `from_env` reads from `AWS_*`
+/// variables (proxy, timeouts, …), so the options go in first and the
+/// environment is applied on top, exactly as `from_env` does.
+fn s3_builder_from_env(options: ClientOptions) -> AmazonS3Builder {
+    let mut builder = AmazonS3Builder::new().with_client_options(options);
+    for (key, value) in std::env::vars_os() {
+        if let (Some(key), Some(value)) = (key.to_str(), value.to_str()) {
+            if key.starts_with("AWS_") {
+                if let Ok(config_key) = key.to_ascii_lowercase().parse() {
+                    builder = builder.with_config(config_key, value);
+                }
+            }
+        }
+    }
+    builder
+}
+
 async fn build_s3_store(
     client: &kube::Client,
     namespace: &str,
@@ -200,7 +257,8 @@ async fn build_s3_store(
         Error::InvalidConfig("Storage type is S3 but s3 config is missing".to_string())
     })?;
 
-    let mut builder = AmazonS3Builder::from_env().with_bucket_name(&s3.bucket);
+    let options = client_options(client, namespace, storage).await?;
+    let mut builder = s3_builder_from_env(options).with_bucket_name(&s3.bucket);
 
     if let Some(region) = &s3.region {
         builder = builder.with_region(region);
@@ -261,7 +319,9 @@ async fn build_azure_store(
         Error::InvalidConfig("Storage type is Azure but azure config is missing".to_string())
     })?;
 
+    let options = client_options(client, namespace, storage).await?;
     let mut builder = MicrosoftAzureBuilder::new()
+        .with_client_options(options)
         .with_account(&azure.storage_account)
         .with_container_name(&azure.container);
 
@@ -321,7 +381,10 @@ async fn build_gcs_store(
         Error::InvalidConfig("Storage type is GCS but gcs config is missing".to_string())
     })?;
 
-    let mut builder = GoogleCloudStorageBuilder::new().with_bucket_name(&gcs.bucket);
+    let options = client_options(client, namespace, storage).await?;
+    let mut builder = GoogleCloudStorageBuilder::new()
+        .with_client_options(options)
+        .with_bucket_name(&gcs.bucket);
 
     if let Some(secret_ref) = &gcs.credentials_secret {
         let secret = get_secret(client, &secret_ref.name, namespace).await?;

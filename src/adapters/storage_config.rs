@@ -263,6 +263,7 @@ mod tests {
             azure: None,
             gcs: None,
             filesystem: None,
+            tls: None,
         };
 
         let config = build_storage_config(&storage).unwrap();

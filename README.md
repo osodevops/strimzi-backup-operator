@@ -8,7 +8,7 @@
 
 A Kubernetes operator for **Kafka backup** and disaster recovery of Strimzi-managed Apache Kafka clusters. Provides dedicated CRDs for automated Kafka backup scheduling, point-in-time recovery, and multi-cloud storage — designed for the Strimzi ecosystem.
 
-**Current release: 0.3.1** — default job image `osodevops/kafka-backup:v0.22.0`.
+**Current release: 0.4.0** — default job image `osodevops/kafka-backup:v0.22.0`.
 
 ## Why Kafka Backup?
 
@@ -358,6 +358,51 @@ storage:
       key: secret-access-key
 ```
 
+### Storage endpoints signed by a private CA
+
+If the storage endpoint's certificate is signed by a private CA (MinIO, Ceph
+RGW, an on-prem S3 appliance, or a TLS-inspecting proxy), put the CA in a
+Secret in the `KafkaBackup`'s namespace and list it under
+`spec.storage.tls.trustedCertificates` (Strimzi's `secretName` / `certificate`
+shape). The key may hold one PEM certificate or a bundle.
+
+```bash
+kubectl -n kafka create secret generic minio-ca --from-file=ca.crt=./ca.crt
+```
+
+```yaml
+storage:
+  type: s3
+  s3:
+    bucket: kafka-backups
+    endpoint: https://minio.example.internal:9000
+    forcePathStyle: true
+    accessKeySecret:
+      name: minio-credentials
+      key: access-key-id
+    secretKeySecret:
+      name: minio-credentials
+      key: secret-access-key
+  tls:
+    trustedCertificates:
+      - secretName: minio-ca
+        certificate: ca.crt
+```
+
+The CAs are **added to** the system trust store, not substituted for it, in:
+
+- backup Jobs, scheduled (CronJob) runs and restore Jobs. Restores use the
+  source `KafkaBackup`'s storage settings. The certificates are mounted at
+  `/certs/storage-ca` and `SSL_CERT_DIR` is set to
+  `/etc/ssl/certs:/certs/storage-ca`. An `SSL_CERT_DIR` you set in `spec.env`
+  still takes precedence.
+- the operator's own storage client, which reads backup manifests and prunes
+  expired backups for `spec.retention`.
+
+`tls` applies to every storage `type` (S3, Azure, GCS). It works with any
+kafka-backup engine image whose `/etc/ssl/certs` holds the system CAs (the
+published Debian-based images do).
+
 ## Authentication
 
 The operator automatically discovers TLS certificates and authentication credentials from your Strimzi cluster. You can also reference `KafkaUser` CRs directly:
@@ -512,6 +557,7 @@ compiled-in default. The image a Job actually used is recorded in
 
 | Operator | Default engine | Minimum engine | Notes |
 |----------|----------------|----------------|-------|
+| 0.4.0 | v0.22.0 | v0.16.0 | `spec.storage.tls.trustedCertificates` (private-CA storage endpoints) |
 | 0.3.0 – 0.3.1 | v0.22.0 | v0.16.0 | `kafkabackup.com/v1` API, templated CRDs; engine 0.22: `prune`/`backup.retention`, `on_missing_topic`, `syncIntervalSecs` honoured |
 | 0.2.25 | v0.19.1 | v0.16.0 | `backupJobs.image`, `EngineVersionSupported` condition, `status.*.image` |
 | 0.2.22 – 0.2.24 | v0.19.1 | v0.16.0 | |
@@ -600,7 +646,7 @@ Prefer not to let Helm manage the CRDs at all? Install with
 `--set crds.install=false` and apply them yourself:
 
 ```bash
-kubectl apply --server-side -f https://github.com/osodevops/strimzi-backup-operator/releases/download/v0.3.0/crds.yaml
+kubectl apply --server-side -f https://github.com/osodevops/strimzi-backup-operator/releases/download/v0.4.0/crds.yaml
 ```
 
 Existing `v1alpha1` objects keep working; they are read back as `v1` (identical

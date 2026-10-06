@@ -2,6 +2,36 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.4.0 - 2026-10-06
+
+### Added
+
+- **`spec.storage.tls.trustedCertificates`** on `KafkaBackup`, for storage endpoints whose
+  certificate is signed by a private CA (MinIO, Ceph RGW, on-prem S3, TLS-inspecting
+  proxies) ([#76](https://github.com/osodevops/strimzi-backup-operator/issues/76)).
+  Each entry names a Secret and the key holding a PEM certificate or bundle
+  (`secretName` / `certificate`, Strimzi's `CertSecretSource` shape). The CAs are
+  **added to** the system trust store, not substituted for it:
+  - backup Jobs, scheduled CronJob runs and restore Jobs (restores use the source
+    `KafkaBackup`'s storage) mount them at `/certs/storage-ca` and get
+    `SSL_CERT_DIR=/etc/ssl/certs:/certs/storage-ca`; an `SSL_CERT_DIR` in `spec.env`
+    still wins. Works with every published kafka-backup engine image; no engine
+    upgrade is needed.
+  - the operator's own storage client (retention discovery and pruning) adds them as
+    root certificates.
+
+  Previously there was no supported way to do this: the Job failed with
+  `invalid peer certificate: UnknownIssuer`, and for a scheduled backup with
+  `retention.pruneOnSchedule` every reconcile failed in the retention pass. Optional
+  field, defaults to the previous behaviour. If you install the CRDs yourself
+  (`crds.install=false`), apply the 0.4.0 CRDs before using it.
+
+### Changed
+
+- e2e harness: MinIO images are pinned to a release tag (`quay.io/minio/minio:latest` is
+  no longer pullable anonymously), and `scripts/e2e/scenario-12-storage-private-ca.sh`
+  covers backup, schedule, retention and restore against HTTPS MinIO behind a private CA.
+
 ## 0.3.1 - 2026-09-07
 
 ### Fixed

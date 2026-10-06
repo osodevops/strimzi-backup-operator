@@ -276,6 +276,33 @@ pub struct StorageSpec {
     /// Filesystem storage configuration
     #[serde(skip_serializing_if = "Option::is_none")]
     pub filesystem: Option<FilesystemStorageSpec>,
+    /// TLS settings for connections to the storage endpoint
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tls: Option<StorageTlsSpec>,
+}
+
+/// TLS settings for connections to the storage endpoint.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct StorageTlsSpec {
+    /// Additional CA certificates to trust when verifying the storage
+    /// endpoint's certificate — for example MinIO or Ceph RGW behind a private
+    /// CA, or a TLS-inspecting proxy. They are added to the system trust store,
+    /// not substituted for it, in backup and restore Job pods and in the
+    /// operator's own storage client (retention).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub trusted_certificates: Vec<CertSecretSource>,
+}
+
+/// A PEM certificate (or bundle) stored in a Secret, in the shape of Strimzi's
+/// `CertSecretSource`.
+#[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CertSecretSource {
+    /// Name of the Secret, in the namespace of the KafkaBackup
+    pub secret_name: String,
+    /// Key in the Secret holding one or more PEM-encoded certificates
+    pub certificate: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, JsonSchema, PartialEq)]

@@ -152,6 +152,34 @@ mod tests {
         check_versions(&crd, "KafkaRestore");
     }
 
+    /// Issue #76: `spec.storage.tls.trustedCertificates` is optional and uses
+    /// Strimzi's `CertSecretSource` shape (`secretName` + `certificate`).
+    #[test]
+    fn kafka_backup_schema_has_optional_storage_trusted_certificates() {
+        let crd = serde_json::to_value(kafka_backup_crd()).unwrap();
+        for version in crd["spec"]["versions"].as_array().unwrap() {
+            let storage = &version["schema"]["openAPIV3Schema"]["properties"]["spec"]["properties"]
+                ["storage"];
+            assert!(
+                !storage["required"]
+                    .as_array()
+                    .unwrap()
+                    .contains(&serde_json::json!("tls")),
+                "{}: storage.tls must be optional",
+                version["name"]
+            );
+            let item = &storage["properties"]["tls"]["properties"]["trustedCertificates"]["items"];
+            assert_eq!(
+                item["required"],
+                serde_json::json!(["certificate", "secretName"]),
+                "{}",
+                version["name"]
+            );
+            assert_eq!(item["properties"]["secretName"]["type"], "string");
+            assert_eq!(item["properties"]["certificate"]["type"], "string");
+        }
+    }
+
     #[test]
     fn helm_template_is_gated_and_keeps_crds() {
         let rendered = to_helm_template(&kafka_backup_crd());

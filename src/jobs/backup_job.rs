@@ -169,6 +169,7 @@ mod tests {
                 azure: None,
                 gcs: None,
                 filesystem: None,
+                tls: None,
             },
             backup: None,
             metrics: None,

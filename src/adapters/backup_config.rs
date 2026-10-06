@@ -509,6 +509,7 @@ mod tests {
                 azure: None,
                 gcs: None,
                 filesystem: None,
+                tls: None,
             },
             backup: Some(BackupOptionsSpec {
                 compression: Some("zstd".to_string()),
