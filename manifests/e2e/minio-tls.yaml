@@ -1,0 +1,97 @@
+# MinIO served over HTTPS with a certificate signed by a private CA (issue #76).
+# scripts/e2e/scenario-12-storage-private-ca.sh generates the CA and creates the
+# `minio-tls-certs` (public.crt/private.key/ca.crt) Secret before applying this.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: minio-tls
+  namespace: minio
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minio-tls
+  template:
+    metadata:
+      labels:
+        app: minio-tls
+    spec:
+      containers:
+        - name: minio
+          image: quay.io/minio/minio:RELEASE.2025-09-07T16-13-09Z
+          args: ["server", "/data", "--certs-dir", "/certs"]
+          env:
+            - name: MINIO_ROOT_USER
+              value: minioadmin
+            - name: MINIO_ROOT_PASSWORD
+              value: minioadmin
+          ports:
+            - containerPort: 9000
+          readinessProbe:
+            tcpSocket:
+              port: 9000
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: certs
+              mountPath: /certs
+              readOnly: true
+      volumes:
+        - name: data
+          emptyDir: {}
+        - name: certs
+          secret:
+            secretName: minio-tls-certs
+            items:
+              - key: public.crt
+                path: public.crt
+              - key: private.key
+                path: private.key
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: minio-tls
+  namespace: minio
+spec:
+  selector:
+    app: minio-tls
+  ports:
+    - port: 9000
+      targetPort: 9000
+---
+# Creates the bucket over HTTPS trusting ONLY the private CA (SSL_CERT_FILE),
+# which proves the certificate chain is valid for a standard client.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: minio-tls-make-bucket
+  namespace: minio
+spec:
+  backoffLimit: 10
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: mc
+          image: quay.io/minio/mc:RELEASE.2025-08-13T08-35-41Z
+          env:
+            - name: SSL_CERT_FILE
+              value: /ca/ca.crt
+          command:
+            - sh
+            - -c
+            - |
+              until mc alias set local https://minio-tls.minio.svc:9000 minioadmin minioadmin; do sleep 2; done
+              mc mb --ignore-existing local/kafka-backups
+          volumeMounts:
+            - name: ca
+              mountPath: /ca
+              readOnly: true
+      volumes:
+        - name: ca
+          secret:
+            secretName: minio-tls-certs
+            items:
+              - key: ca.crt
+                path: ca.crt

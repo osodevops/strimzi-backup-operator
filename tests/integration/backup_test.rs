@@ -45,6 +45,7 @@ fn sample_backup() -> KafkaBackup {
             azure: None,
             gcs: None,
             filesystem: None,
+            tls: None,
         },
         backup: Some(BackupOptionsSpec {
             compression: Some("zstd".to_string()),
@@ -597,4 +598,213 @@ fn test_backup_cronjob_carries_owner_reference_and_owned_selector_label() {
     assert_eq!(owner.name, "daily-backup");
     assert_eq!(owner.uid, backup.metadata.uid.clone().unwrap());
     assert_eq!(owner.controller, Some(true));
+}
+
+/// Issue #76: CAs that sign the storage endpoint's certificate are mounted
+/// from their Secrets and added to the engine's trust store next to the
+/// system roots (`SSL_CERT_DIR` keeps `/etc/ssl/certs`).
+fn storage_trusting_private_cas() -> StorageTlsSpec {
+    StorageTlsSpec {
+        trusted_certificates: vec![
+            CertSecretSource {
+                secret_name: "minio-ca".to_string(),
+                certificate: "ca.crt".to_string(),
+            },
+            CertSecretSource {
+                secret_name: "corp-proxy-ca".to_string(),
+                certificate: "bundle.pem".to_string(),
+            },
+        ],
+    }
+}
+
+fn assert_trusts_storage_cas(pod_spec: &k8s_openapi::api::core::v1::PodSpec) {
+    let volume = pod_spec
+        .volumes
+        .as_ref()
+        .unwrap()
+        .iter()
+        .find(|v| v.name == "storage-trusted-certs")
+        .expect("storage-trusted-certs volume");
+    let sources = volume
+        .projected
+        .as_ref()
+        .expect("projected volume")
+        .sources
+        .as_ref()
+        .unwrap();
+    let projected: Vec<(String, String, String)> = sources
+        .iter()
+        .map(|source| {
+            let secret = source.secret.as_ref().expect("secret projection");
+            let items = secret.items.as_ref().expect("explicit items");
+            assert_eq!(items.len(), 1);
+            (
+                secret.name.clone(),
+                items[0].key.clone(),
+                items[0].path.clone(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        projected,
+        vec![
+            (
+                "minio-ca".to_string(),
+                "ca.crt".to_string(),
+                "0-minio-ca-ca.crt".to_string()
+            ),
+            (
+                "corp-proxy-ca".to_string(),
+                "bundle.pem".to_string(),
+                "1-corp-proxy-ca-bundle.pem".to_string()
+            ),
+        ]
+    );
+
+    let container = &pod_spec.containers[0];
+    let mount = container
+        .volume_mounts
+        .as_ref()
+        .unwrap()
+        .iter()
+        .find(|m| m.name == "storage-trusted-certs")
+        .expect("storage-trusted-certs mount");
+    assert_eq!(mount.mount_path, "/certs/storage-ca");
+    assert_eq!(mount.read_only, Some(true));
+
+    let ssl_cert_dir: Vec<&str> = container
+        .env
+        .as_ref()
+        .unwrap()
+        .iter()
+        .filter(|e| e.name == "SSL_CERT_DIR")
+        .filter_map(|e| e.value.as_deref())
+        .collect();
+    assert_eq!(ssl_cert_dir, vec!["/etc/ssl/certs:/certs/storage-ca"]);
+}
+
+#[test]
+fn test_backup_jobs_trust_storage_ca_certificates() {
+    let mut backup = sample_backup();
+    backup.spec.storage.tls = Some(storage_trusting_private_cas());
+    let cluster = sample_cluster();
+
+    let job = build_backup_job(
+        &backup,
+        "daily-backup-20260213-020000",
+        "daily-backup-config",
+        &cluster,
+        &ResolvedAuth::None,
+        Some("strimzi-backup-operator"),
+        JobImage::compiled_in(),
+    )
+    .unwrap();
+    assert_trusts_storage_cas(job.spec.as_ref().unwrap().template.spec.as_ref().unwrap());
+
+    let cronjob = build_backup_cronjob(
+        &backup,
+        "daily-backup-config",
+        &cluster,
+        &ResolvedAuth::None,
+        Some("strimzi-backup-operator"),
+        JobImage::compiled_in(),
+    )
+    .unwrap();
+    assert_trusts_storage_cas(
+        cronjob
+            .spec
+            .as_ref()
+            .unwrap()
+            .job_template
+            .spec
+            .as_ref()
+            .unwrap()
+            .template
+            .spec
+            .as_ref()
+            .unwrap(),
+    );
+}
+
+/// Back-compat: without `spec.storage.tls` the pod keeps the image's trust
+/// store untouched — no extra volume, no `SSL_CERT_DIR`.
+#[test]
+fn test_backup_job_without_storage_tls_leaves_trust_store_alone() {
+    let backup = sample_backup();
+    let job = build_backup_job(
+        &backup,
+        "daily-backup-20260213-020000",
+        "daily-backup-config",
+        &sample_cluster(),
+        &ResolvedAuth::None,
+        Some("strimzi-backup-operator"),
+        JobImage::compiled_in(),
+    )
+    .unwrap();
+
+    let pod_spec = job.spec.as_ref().unwrap().template.spec.as_ref().unwrap();
+    assert!(!pod_spec
+        .volumes
+        .as_ref()
+        .unwrap()
+        .iter()
+        .any(|v| v.name == "storage-trusted-certs"));
+    let container = &pod_spec.containers[0];
+    assert!(!container
+        .volume_mounts
+        .as_ref()
+        .unwrap()
+        .iter()
+        .any(|m| m.name == "storage-trusted-certs"));
+    assert!(!container
+        .env
+        .iter()
+        .flatten()
+        .any(|e| e.name == "SSL_CERT_DIR"));
+}
+
+/// An explicit `spec.env` `SSL_CERT_DIR` is appended after the operator's, so
+/// it still wins (Kubernetes uses the last duplicate).
+#[test]
+fn test_backup_job_spec_env_overrides_ssl_cert_dir() {
+    let mut backup = sample_backup();
+    backup.spec.storage.tls = Some(storage_trusting_private_cas());
+    backup.spec.env.push(serde_json::json!({
+        "name": "SSL_CERT_DIR",
+        "value": "/opt/certs"
+    }));
+
+    let job = build_backup_job(
+        &backup,
+        "daily-backup-20260213-020000",
+        "daily-backup-config",
+        &sample_cluster(),
+        &ResolvedAuth::None,
+        Some("strimzi-backup-operator"),
+        JobImage::compiled_in(),
+    )
+    .unwrap();
+
+    let env = job
+        .spec
+        .as_ref()
+        .unwrap()
+        .template
+        .spec
+        .as_ref()
+        .unwrap()
+        .containers[0]
+        .env
+        .clone()
+        .unwrap();
+    let ssl_cert_dir: Vec<&str> = env
+        .iter()
+        .filter(|e| e.name == "SSL_CERT_DIR")
+        .filter_map(|e| e.value.as_deref())
+        .collect();
+    assert_eq!(
+        ssl_cert_dir,
+        vec!["/etc/ssl/certs:/certs/storage-ca", "/opt/certs"]
+    );
 }

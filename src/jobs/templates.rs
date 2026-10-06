@@ -2,7 +2,8 @@ use std::collections::BTreeMap;
 
 use k8s_openapi::api::core::v1::{
     ConfigMapVolumeSource, Container, ContainerPort, EnvVar, EnvVarSource, KeyToPath,
-    ObjectFieldSelector, PodSpec, SecretKeySelector, SecretVolumeSource, Volume, VolumeMount,
+    ObjectFieldSelector, PodSpec, ProjectedVolumeSource, SecretKeySelector, SecretProjection,
+    SecretVolumeSource, Volume, VolumeMount, VolumeProjection,
 };
 
 use crate::crd::common::{
@@ -10,6 +11,12 @@ use crate::crd::common::{
 };
 use crate::strimzi::kafka_user::ResolvedAuth;
 use crate::strimzi::tls;
+
+/// Where `spec.storage.tls.trustedCertificates` are mounted in Job pods.
+const STORAGE_TRUSTED_CERTS_DIR: &str = "/certs/storage-ca";
+
+/// The engine image's system CA directory (Debian `ca-certificates`).
+const SYSTEM_CERTS_DIR: &str = "/etc/ssl/certs";
 
 /// Build standard labels for backup/restore pods
 pub fn build_labels(cr_name: &str, cluster_name: &str, job_type: &str) -> BTreeMap<String, String> {
@@ -176,8 +183,69 @@ pub fn build_volumes_and_mounts(
 
     // Storage credentials volume
     add_storage_credentials(storage, &mut volumes, &mut mounts, &mut env);
+    add_storage_trusted_certificates(storage, &mut volumes, &mut mounts, &mut env);
 
     (volumes, mounts, env)
+}
+
+/// Mount `spec.storage.tls.trustedCertificates` and add them to the engine's
+/// trust store.
+///
+/// kafka-backup's storage client verifies certificates with the platform
+/// verifier, which loads roots through `rustls-native-certs`. Setting
+/// `SSL_CERT_DIR` replaces the platform lookup, so it lists the system
+/// directory first: the extra CAs are added to the system roots, not
+/// substituted for them. Each certificate gets an index-prefixed file name so
+/// two Secrets with the same key cannot collide.
+fn add_storage_trusted_certificates(
+    storage: &StorageSpec,
+    volumes: &mut Vec<Volume>,
+    mounts: &mut Vec<VolumeMount>,
+    env: &mut Vec<EnvVar>,
+) {
+    let Some(tls) = storage.tls.as_ref() else {
+        return;
+    };
+    if tls.trusted_certificates.is_empty() {
+        return;
+    }
+
+    let sources = tls
+        .trusted_certificates
+        .iter()
+        .enumerate()
+        .map(|(i, source)| VolumeProjection {
+            secret: Some(SecretProjection {
+                name: source.secret_name.clone(),
+                items: Some(vec![KeyToPath {
+                    key: source.certificate.clone(),
+                    path: format!("{i}-{}-{}", source.secret_name, source.certificate),
+                    ..Default::default()
+                }]),
+                ..Default::default()
+            }),
+            ..Default::default()
+        })
+        .collect();
+
+    volumes.push(Volume {
+        name: "storage-trusted-certs".to_string(),
+        projected: Some(ProjectedVolumeSource {
+            sources: Some(sources),
+            ..Default::default()
+        }),
+        ..Default::default()
+    });
+    mounts.push(VolumeMount {
+        name: "storage-trusted-certs".to_string(),
+        mount_path: STORAGE_TRUSTED_CERTS_DIR.to_string(),
+        read_only: Some(true),
+        ..Default::default()
+    });
+    env.push(static_env_var(
+        "SSL_CERT_DIR",
+        &format!("{SYSTEM_CERTS_DIR}:{STORAGE_TRUSTED_CERTS_DIR}"),
+    ));
 }
 
 /// Build an env var whose value is the owning Job name.
@@ -504,6 +572,7 @@ mod tests {
             azure: None,
             gcs: None,
             filesystem: None,
+            tls: None,
         }
     }
 

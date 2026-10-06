@@ -42,6 +42,7 @@ fn sample_backup() -> KafkaBackup {
             azure: None,
             gcs: None,
             filesystem: None,
+            tls: None,
         },
         backup: None,
         metrics: None,
@@ -509,4 +510,56 @@ fn test_restore_job_custom_backoff_limit() {
     .unwrap();
 
     assert_eq!(job.spec.as_ref().unwrap().backoff_limit, Some(2));
+}
+
+/// Issue #76: a restore reads the source KafkaBackup's storage, so it trusts
+/// the same storage CAs.
+#[test]
+fn test_restore_job_trusts_source_backup_storage_ca_certificates() {
+    let restore = sample_restore();
+    let mut backup = sample_backup();
+    backup.spec.storage.tls = Some(StorageTlsSpec {
+        trusted_certificates: vec![CertSecretSource {
+            secret_name: "minio-ca".to_string(),
+            certificate: "ca.crt".to_string(),
+        }],
+    });
+
+    let job = build_restore_job(
+        &restore,
+        "pitr-restore-20260213-093000",
+        "pitr-restore-config",
+        &sample_cluster(),
+        &ResolvedAuth::None,
+        &backup,
+        Some("strimzi-backup-operator"),
+        JobImage::compiled_in(),
+    )
+    .unwrap();
+
+    let pod_spec = job.spec.as_ref().unwrap().template.spec.as_ref().unwrap();
+    let volume = pod_spec
+        .volumes
+        .as_ref()
+        .unwrap()
+        .iter()
+        .find(|v| v.name == "storage-trusted-certs")
+        .expect("storage-trusted-certs volume");
+    let secret = volume.projected.as_ref().unwrap().sources.as_ref().unwrap()[0]
+        .secret
+        .as_ref()
+        .unwrap();
+    assert_eq!(secret.name, "minio-ca");
+    assert_eq!(secret.items.as_ref().unwrap()[0].key, "ca.crt");
+
+    let container = &pod_spec.containers[0];
+    assert!(container
+        .volume_mounts
+        .as_ref()
+        .unwrap()
+        .iter()
+        .any(|m| m.name == "storage-trusted-certs" && m.mount_path == "/certs/storage-ca"));
+    assert!(container.env.as_ref().unwrap().iter().any(|e| {
+        e.name == "SSL_CERT_DIR" && e.value.as_deref() == Some("/etc/ssl/certs:/certs/storage-ca")
+    }));
 }

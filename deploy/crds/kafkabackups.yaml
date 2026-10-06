@@ -604,6 +604,27 @@ spec:
                     required:
                     - bucket
                     type: object
+                  tls:
+                    description: TLS settings for connections to the storage endpoint
+                    nullable: true
+                    properties:
+                      trustedCertificates:
+                        description: Additional CA certificates to trust when verifying the storage endpoint's certificate — for example MinIO or Ceph RGW behind a private CA, or a TLS-inspecting proxy. They are added to the system trust store, not substituted for it, in backup and restore Job pods and in the operator's own storage client (retention).
+                        items:
+                          description: A PEM certificate (or bundle) stored in a Secret, in the shape of Strimzi's `CertSecretSource`.
+                          properties:
+                            certificate:
+                              description: Key in the Secret holding one or more PEM-encoded certificates
+                              type: string
+                            secretName:
+                              description: Name of the Secret, in the namespace of the KafkaBackup
+                              type: string
+                          required:
+                          - certificate
+                          - secretName
+                          type: object
+                        type: array
+                    type: object
                   type:
                     description: Storage backend type
                     enum:
@@ -1495,6 +1516,27 @@ spec:
                         type: object
                     required:
                     - bucket
+                    type: object
+                  tls:
+                    description: TLS settings for connections to the storage endpoint
+                    nullable: true
+                    properties:
+                      trustedCertificates:
+                        description: Additional CA certificates to trust when verifying the storage endpoint's certificate — for example MinIO or Ceph RGW behind a private CA, or a TLS-inspecting proxy. They are added to the system trust store, not substituted for it, in backup and restore Job pods and in the operator's own storage client (retention).
+                        items:
+                          description: A PEM certificate (or bundle) stored in a Secret, in the shape of Strimzi's `CertSecretSource`.
+                          properties:
+                            certificate:
+                              description: Key in the Secret holding one or more PEM-encoded certificates
+                              type: string
+                            secretName:
+                              description: Name of the Secret, in the namespace of the KafkaBackup
+                              type: string
+                          required:
+                          - certificate
+                          - secretName
+                          type: object
+                        type: array
                     type: object
                   type:
                     description: Storage backend type

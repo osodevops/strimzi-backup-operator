@@ -50,6 +50,7 @@ fn scheduled_backup() -> Value {
             filesystem: Some(FilesystemStorageSpec {
                 path: "/backups".to_string(),
             }),
+            tls: None,
         },
         backup: None,
         metrics: None,

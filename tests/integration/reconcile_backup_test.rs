@@ -46,6 +46,7 @@ fn scheduled_backup(suspend: bool) -> KafkaBackup {
             filesystem: Some(FilesystemStorageSpec {
                 path: "/backups".to_string(),
             }),
+            tls: None,
         },
         backup: None,
         metrics: None,
