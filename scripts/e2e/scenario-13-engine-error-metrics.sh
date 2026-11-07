@@ -3,10 +3,12 @@
 # Usage: scenario-13-engine-error-metrics.sh <operator-image-tag>
 # OPERATOR_REPO may select a local build; JOB_IMAGE overrides the engine for a
 # source-build run. Leave both unset to verify the published release defaults.
+# CHART may select an unpacked published chart instead of the checkout.
 # EXPECT_ZERO_ERRORS=false reproduces the missing series on an older engine.
 export SCEN="${SCEN:-13-engine-error-metrics}"
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 TAG="${1:?usage: $0 <operator-image-tag>}"
+CHART="${CHART:-$CHART_FIX}"
 EXPECTED_IMAGE="${JOB_IMAGE:-$ENGINE_NEW}"
 EXPECT_ZERO_ERRORS="${EXPECT_ZERO_ERRORS:-true}"
 OUT="$EVID/$SCEN/$TAG"; mkdir -p "$OUT"
@@ -35,7 +37,7 @@ for name in issue7980-snapshot issue7980-scheduled; do
   k -n "$NS_KAFKA" delete kafkabackup "$name" --ignore-not-found --wait=true >/dev/null
 done
 k -n "$NS_KAFKA" delete kafkarestore issue7980-restore --ignore-not-found --wait=true >/dev/null
-h upgrade --install "$RELEASE" "$CHART_FIX" -n "$NS_OP" --create-namespace \
+h upgrade --install "$RELEASE" "$CHART" -n "$NS_OP" --create-namespace \
   --set image.repository="${OPERATOR_REPO:-ghcr.io/osodevops/strimzi-backup-operator}" \
   --set image.tag="$TAG" --set image.pullPolicy=IfNotPresent \
   --set backupJobs.image="${JOB_IMAGE:-}" --set backupJobs.imagePullPolicy=IfNotPresent \
