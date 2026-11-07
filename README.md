@@ -8,7 +8,7 @@
 
 A Kubernetes operator for **Kafka backup** and disaster recovery of Strimzi-managed Apache Kafka clusters. Provides dedicated CRDs for automated Kafka backup scheduling, point-in-time recovery, and multi-cloud storage — designed for the Strimzi ecosystem.
 
-**Current release: 0.4.0** — default job image `osodevops/kafka-backup:v0.22.0`.
+**Current release: 0.5.0** — default job image `osodevops/kafka-backup:v0.27.1`.
 
 ## Why Kafka Backup?
 
@@ -557,6 +557,7 @@ compiled-in default. The image a Job actually used is recorded in
 
 | Operator | Default engine | Minimum engine | Notes |
 |----------|----------------|----------------|-------|
+| 0.5.0 | v0.27.1 | v0.16.0 | Engine fixes through 0.27.1; backup error counters publish zero before the first error |
 | 0.4.0 | v0.22.0 | v0.16.0 | `spec.storage.tls.trustedCertificates` (private-CA storage endpoints) |
 | 0.3.0 – 0.3.1 | v0.22.0 | v0.16.0 | `kafkabackup.com/v1` API, templated CRDs; engine 0.22: `prune`/`backup.retention`, `on_missing_topic`, `syncIntervalSecs` honoured |
 | 0.2.25 | v0.19.1 | v0.16.0 | `backupJobs.image`, `EngineVersionSupported` condition, `status.*.image` |
@@ -646,7 +647,7 @@ Prefer not to let Helm manage the CRDs at all? Install with
 `--set crds.install=false` and apply them yourself:
 
 ```bash
-kubectl apply --server-side -f https://github.com/osodevops/strimzi-backup-operator/releases/download/v0.4.0/crds.yaml
+kubectl apply --server-side -f https://github.com/osodevops/strimzi-backup-operator/releases/download/v0.5.0/crds.yaml
 ```
 
 Existing `v1alpha1` objects keep working; they are read back as `v1` (identical
@@ -718,6 +719,14 @@ Operator metrics include:
 | `strimzi_backup_operator_build_info` | Gauge | Running operator version |
 | `strimzi_backup_operator_reconciliations_total` | Counter | Reconciliations by controller and result |
 | `strimzi_backup_operator_reconciliation_duration_seconds` | Histogram | Reconciliation latency by controller and result |
+
+With the default engine, `kafka_backup_errors_total{backup_id="…",error_type="…"}`
+is published at `0` for every known error category before the first error. For
+error alerts, use `sum by (backup_id) (rate(kafka_backup_errors_total[5m])) > 0`.
+Zero errors alone does not prove that backups are completing: also monitor
+backup progress, the CR status and scrape availability (`up`). One-shot Job
+metrics disappear after the process exits; configure `keepAliveSeconds` below
+so Prometheus has time to scrape them.
 
 Job metrics include `kafka_backup_lag_records`, the low-cardinality
 `kafka_backup_lag_records_sum`, snapshot progress gauges
