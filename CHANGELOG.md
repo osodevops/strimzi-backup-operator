@@ -6,11 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
-- Update the default job image to `osodevops/kafka-backup:v0.27.1` (was `osodevops/kafka-backup:v0.22.0`).
-  This includes backup rate limiting, restore connection/offset-report fixes,
-  storage-credential redaction and the zero-valued backup error counters requested
-  in #79. Existing archives remain readable; the operator CRD is unchanged.
-  Pin `spec.image` or Helm `backupJobs.image` to retain an older engine (#80).
+- Update the default job image to `osodevops/kafka-backup:v0.27.2` (was
+  `osodevops/kafka-backup:v0.22.0`). This includes backup rate limiting,
+  restore connection/offset-report fixes, storage-credential redaction and
+  the zero-valued backup error counters requested in #79. Existing archives
+  remain readable; the operator CRD is unchanged. Pin `spec.image` or Helm
+  `backupJobs.image` to retain an older engine (#80).
 
 ## 0.4.0 - 2026-10-06
 
