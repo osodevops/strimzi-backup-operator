@@ -171,6 +171,11 @@ pub struct KafkaConnectionSpec {
     /// TCP connections to keep per broker
     #[serde(skip_serializing_if = "Option::is_none")]
     pub connections_per_broker: Option<usize>,
+    /// Broker Fetch wait in ms (engine default 500, range 0–30000; engine 0.28.0+).
+    /// With KIP-1018, remote reads use broker remote.fetch.max.wait.ms instead.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(range(min = 0, max = 30000))]
+    pub fetch_max_wait_ms: Option<i32>,
 }
 
 /// Logging configuration passed through to kafka-backup job config.

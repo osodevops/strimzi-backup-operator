@@ -8,7 +8,24 @@
 
 A Kubernetes operator for **Kafka backup** and disaster recovery of Strimzi-managed Apache Kafka clusters. Provides dedicated CRDs for automated Kafka backup scheduling, point-in-time recovery, and multi-cloud storage — designed for the Strimzi ecosystem.
 
-**Current release: 0.5.0** — default job image `osodevops/kafka-backup:v0.27.2`.
+**Current release: 0.6.0** — default job image `osodevops/kafka-backup:v0.28.0`.
+
+## Empty-fetch retries and upgrade notes
+
+Release 0.6.0 defaults Jobs to engine 0.28.0. An empty Fetch below the captured end no longer reports a successful incomplete backup: the engine retries for 30 seconds per no-progress streak, then fails while preserving the durable prefix. It resets the budget when offsets advance, includes backoff and subsequent RPCs, and closes interrupted connections. Restore logs also report key plus value bytes and throughput correctly.
+
+```yaml
+spec:
+  connection:
+    fetchMaxWaitMs: 500            # 0–30000 ms
+  backup:
+    emptyFetchRetrySecs: 30        # 0–3600 seconds; 0 fails immediately
+    stopAtCurrentOffsets: true
+```
+
+Upgrade the Helm chart to apply the CRD changes, or apply the release's `crds.yaml` before updating the operator. Both `kafkabackup.com/v1` and the served deprecated `v1alpha1` accept these optional fields. The defaults above come from the engine when fields are omitted. `spec.backup.config.empty_fetch_retry_secs` overrides the typed budget using native engine key names.
+
+Check existing `spec.image` and Helm `backupJobs.image` pins: they retain precedence over the new compiled default and must use engine 0.28.0 or newer for this fix. Re-run affected backups and validate their manifests/record counts; an upgrade does not fill holes in an existing archive. On Kafka with KIP-1018, remote reads use broker `remote.fetch.max.wait.ms` independently of client Fetch wait.
 
 ## Why Kafka Backup?
 
@@ -557,6 +574,7 @@ compiled-in default. The image a Job actually used is recorded in
 
 | Operator | Default engine | Minimum engine | Notes |
 |----------|----------------|----------------|-------|
+| 0.6.0 | v0.28.0 | v0.16.0 | Bounded empty-fetch retries; accurate restore byte/throughput metrics; new optional retry/Fetch-wait settings require engine 0.28.0 |
 | 0.5.0 | v0.27.2 | v0.16.0 | Engine fixes through 0.27.2; backup error counters publish zero before the first error |
 | 0.4.0 | v0.22.0 | v0.16.0 | `spec.storage.tls.trustedCertificates` (private-CA storage endpoints) |
 | 0.3.0 – 0.3.1 | v0.22.0 | v0.16.0 | `kafkabackup.com/v1` API, templated CRDs; engine 0.22: `prune`/`backup.retention`, `on_missing_topic`, `syncIntervalSecs` honoured |
@@ -647,7 +665,7 @@ Prefer not to let Helm manage the CRDs at all? Install with
 `--set crds.install=false` and apply them yourself:
 
 ```bash
-kubectl apply --server-side -f https://github.com/osodevops/strimzi-backup-operator/releases/download/v0.5.0/crds.yaml
+kubectl apply --server-side -f https://github.com/osodevops/strimzi-backup-operator/releases/download/v0.6.0/crds.yaml
 ```
 
 Existing `v1alpha1` objects keep working; they are read back as `v1` (identical

@@ -127,6 +127,13 @@ spec:
                     minimum: 0.0
                     nullable: true
                     type: integer
+                  fetchMaxWaitMs:
+                    description: Broker Fetch wait in ms (engine default 500, range 0–30000; engine 0.28.0+). With KIP-1018, remote reads use broker remote.fetch.max.wait.ms instead.
+                    format: int32
+                    maximum: 30000.0
+                    minimum: 0.0
+                    nullable: true
+                    type: integer
                   keepaliveIntervalSecs:
                     description: Seconds between keepalive probes
                     format: uint64
@@ -800,6 +807,13 @@ spec:
                   connectionsPerBroker:
                     description: TCP connections to keep per broker
                     format: uint
+                    minimum: 0.0
+                    nullable: true
+                    type: integer
+                  fetchMaxWaitMs:
+                    description: Broker Fetch wait in ms (engine default 500, range 0–30000; engine 0.28.0+). With KIP-1018, remote reads use broker remote.fetch.max.wait.ms instead.
+                    format: int32
+                    maximum: 30000.0
                     minimum: 0.0
                     nullable: true
                     type: integer

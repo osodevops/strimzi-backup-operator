@@ -138,6 +138,13 @@ spec:
                     description: Run continuously instead of one-shot
                     nullable: true
                     type: boolean
+                  emptyFetchRetrySecs:
+                    description: Per-partition no-progress retry budget in seconds (engine default 30, range 0–3600; engine 0.28.0+). Zero fails on the first stalled Fetch. Includes backoff and subsequent requests; resets on offset progress.
+                    format: uint64
+                    maximum: 3600.0
+                    minimum: 0.0
+                    nullable: true
+                    type: integer
                   includeInternalTopics:
                     description: Include internal Kafka topics
                     nullable: true
@@ -199,6 +206,13 @@ spec:
                   connectionsPerBroker:
                     description: TCP connections to keep per broker
                     format: uint
+                    minimum: 0.0
+                    nullable: true
+                    type: integer
+                  fetchMaxWaitMs:
+                    description: Broker Fetch wait in ms (engine default 500, range 0–30000; engine 0.28.0+). With KIP-1018, remote reads use broker remote.fetch.max.wait.ms instead.
+                    format: int32
+                    maximum: 30000.0
                     minimum: 0.0
                     nullable: true
                     type: integer
@@ -1051,6 +1065,13 @@ spec:
                     description: Run continuously instead of one-shot
                     nullable: true
                     type: boolean
+                  emptyFetchRetrySecs:
+                    description: Per-partition no-progress retry budget in seconds (engine default 30, range 0–3600; engine 0.28.0+). Zero fails on the first stalled Fetch. Includes backoff and subsequent requests; resets on offset progress.
+                    format: uint64
+                    maximum: 3600.0
+                    minimum: 0.0
+                    nullable: true
+                    type: integer
                   includeInternalTopics:
                     description: Include internal Kafka topics
                     nullable: true
@@ -1112,6 +1133,13 @@ spec:
                   connectionsPerBroker:
                     description: TCP connections to keep per broker
                     format: uint
+                    minimum: 0.0
+                    nullable: true
+                    type: integer
+                  fetchMaxWaitMs:
+                    description: Broker Fetch wait in ms (engine default 500, range 0–30000; engine 0.28.0+). With KIP-1018, remote reads use broker remote.fetch.max.wait.ms instead.
+                    format: int32
+                    maximum: 30000.0
                     minimum: 0.0
                     nullable: true
                     type: integer

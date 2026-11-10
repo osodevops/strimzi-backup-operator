@@ -277,6 +277,11 @@ fn build_backup_options(opts: &crate::crd::kafka_backup::BackupOptionsSpec) -> R
         opts.stop_at_current_offsets,
     );
     insert_u64(&mut config, "poll_interval_ms", opts.poll_interval_ms);
+    insert_u64(
+        &mut config,
+        "empty_fetch_retry_secs",
+        opts.empty_fetch_retry_secs,
+    );
     insert_bool(
         &mut config,
         "consumer_group_snapshot",
@@ -348,6 +353,12 @@ fn build_connection_config(connection: &crate::crd::common::KafkaConnectionSpec)
         config.insert(
             Value::String("connections_per_broker".to_string()),
             Value::Number(serde_yaml::Number::from(connections_per_broker as u64)),
+        );
+    }
+    if let Some(wait) = connection.fetch_max_wait_ms {
+        config.insert(
+            Value::String("fetch_max_wait_ms".into()),
+            Value::Number(wait.into()),
         );
     }
     Value::Mapping(config)
@@ -528,6 +539,7 @@ mod tests {
                 source_cluster_id: None,
                 stop_at_current_offsets: None,
                 poll_interval_ms: None,
+                empty_fetch_retry_secs: None,
                 consumer_group_snapshot: None,
                 config: None,
             }),
