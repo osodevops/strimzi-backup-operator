@@ -202,6 +202,13 @@ pub struct BackupOptionsSpec {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub poll_interval_ms: Option<u64>,
 
+    /// Per-partition no-progress retry budget in seconds (engine default 30,
+    /// range 0–3600; engine 0.28.0+). Zero fails on the first stalled Fetch.
+    /// Includes backoff and subsequent requests; resets on offset progress.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[schemars(range(min = 0, max = 3600))]
+    pub empty_fetch_retry_secs: Option<u64>,
+
     /// Snapshot consumer group offsets after each backup cycle
     #[serde(skip_serializing_if = "Option::is_none")]
     pub consumer_group_snapshot: Option<bool>,

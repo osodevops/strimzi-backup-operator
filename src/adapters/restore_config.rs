@@ -467,6 +467,12 @@ fn build_connection_config(connection: &crate::crd::common::KafkaConnectionSpec)
             Value::Number(serde_yaml::Number::from(connections_per_broker as u64)),
         );
     }
+    if let Some(wait) = connection.fetch_max_wait_ms {
+        config.insert(
+            Value::String("fetch_max_wait_ms".into()),
+            Value::Number(wait.into()),
+        );
+    }
     Value::Mapping(config)
 }
 

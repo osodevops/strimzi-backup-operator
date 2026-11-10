@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.6.0 - 2026-11-10
+
+### Fixed
+
+- Default backup and restore Jobs to `osodevops/kafka-backup:v0.28.0` for bounded, fail-closed empty-fetch retries (kafka-backup#256) and accurate restore payload-byte/throughput metrics (kafka-backup#251). Existing archives remain readable. Re-run incomplete backups with the new engine; any existing holes are not repaired by upgrading alone.
+
+### Added
+
+- Optional `spec.backup.emptyFetchRetrySecs` (0–3600, engine default 30; zero fails immediately) and `spec.connection.fetchMaxWaitMs` (0–30000, engine default 500) with validation in both served API schemas. Pass both to the engine using its native YAML keys. Free-form `spec.backup.config` keeps precedence.
+- These options and the empty-fetch fix require engine 0.28.0 or newer. Existing `spec.image` and Helm `backupJobs.image` overrides remain in force; remove or update older pins. Upgrade CRDs with the chart before using the new typed fields.
+
 ## 0.5.0 - 2026-11-07
 
 ### Changed
