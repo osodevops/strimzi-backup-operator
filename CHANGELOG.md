@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.6.1 - 2026-11-17
+
+### Changed
+
+- Update the default job image to `osodevops/kafka-backup:v0.28.1` (was `osodevops/kafka-backup:v0.28.0`).
+  Dry-run counts now apply replay's overlap, PITR and record-filter rules;
+  the shared validation command counts visible records rather than Kafka offset
+  spans (kafka-backup-operator#114). Existing archives remain readable. Update or
+  remove `spec.image` / Helm `backupJobs.image` pins to receive the fix.
+
 ## 0.6.0 - 2026-11-10
 
 ### Fixed
