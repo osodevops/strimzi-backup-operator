@@ -11,6 +11,12 @@ A Kubernetes operator for **Kafka backup** and disaster recovery of Strimzi-mana
 
 **Current release: 0.6.1** — default job image `osodevops/kafka-backup:v0.28.1`.
 
+## Sponsorship
+
+strimzi-backup-operator is free and open source. If your company relies on it, please consider [sponsoring it through GitHub Sponsors](https://github.com/sponsors/osodevops). Sponsorship pays for testing against new Kafka versions and distributions, release engineering, security fixes and documentation.
+
+Need support, an SLA or Enterprise features? See [Kafka Backup Enterprise](https://enterprise.kafkabackup.com).
+
 ## Empty-fetch retries and upgrade notes
 
 Release 0.6.0 defaults Jobs to engine 0.28.0. An empty Fetch below the captured end no longer reports a successful incomplete backup: the engine retries for 30 seconds per no-progress streak, then fails while preserving the durable prefix. It resets the budget when offsets advance, includes backoff and subsequent RPCs, and closes interrupted connections. Restore logs also report key plus value bytes and throughput correctly.
