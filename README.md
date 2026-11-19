@@ -3,6 +3,7 @@
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Rust](https://img.shields.io/badge/rust-1.88%2B-orange.svg)](https://www.rust-lang.org)
 [![Kubernetes](https://img.shields.io/badge/kubernetes-1.27%2B-326ce5.svg)](https://kubernetes.io)
+[![Sponsor](https://img.shields.io/badge/Sponsor-EA4AAA?logo=githubsponsors&logoColor=white)](https://github.com/sponsors/osodevops)
 
 > **Disclaimer:** This project is not part of the [Strimzi](https://strimzi.io/) project or the CNCF. It is an independent, community-built operator designed to work with Strimzi-managed Kafka clusters.
 
