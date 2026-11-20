@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.6.2 - 2026-11-20
+
+### Changed
+
+- Update the default job image to `osodevops/kafka-backup:v0.30.1` (was `osodevops/kafka-backup:v0.28.1`).
+  A restore that creates its topics no longer fails with
+  `Broker returned error code 3: ListOffsets error for <topic>:<partition>` on
+  clusters that list a new topic before every partition is served, such as
+  Confluent Cloud (kafka-backup#268). Existing archives remain readable. Update
+  or remove `spec.image` / Helm `backupJobs.image` pins to receive the fix.
+- Engine 0.29.0 and 0.30.0 add OAuth (SASL/OAUTHBEARER) and Schema Registry and
+  Apicurio Registry backup and restore. The operator's CRDs do not expose them:
+  they are top-level engine settings, and `spec.backup.config` /
+  `spec.restore.config` only reach the `backup` and `restore` sections. CRD
+  schemas are unchanged.
+
 ## 0.6.1 - 2026-11-17
 
 ### Changed
