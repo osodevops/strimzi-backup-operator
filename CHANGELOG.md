@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.6.3 - 2026-11-20
+
+### Changed
+
+- Update the default job image to `osodevops/kafka-backup:v0.30.2` (was `osodevops/kafka-backup:v0.30.1`).
+  The shared CLI now reports per-topic/partition validation count diagnostics
+  in text and JSON/PDF evidence (kafka-backup-operator#117), including incomplete
+  scans. Existing archives remain readable. This operator has no
+  KafkaBackupValidation CRD; validation is a CLI operation. Update existing
+  `spec.image` or Helm `backupJobs.image` pins to receive engine changes.
+
 ## 0.6.2 - 2026-11-20
 
 ### Changed
