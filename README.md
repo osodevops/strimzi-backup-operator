@@ -9,7 +9,7 @@
 
 A Kubernetes operator for **Kafka backup** and disaster recovery of Strimzi-managed Apache Kafka clusters. Provides dedicated CRDs for automated Kafka backup scheduling, point-in-time recovery, and multi-cloud storage — designed for the Strimzi ecosystem.
 
-**Current release: 0.6.1** — default job image `osodevops/kafka-backup:v0.28.1`.
+**Current release: 0.6.2** — default job image `osodevops/kafka-backup:v0.30.1`.
 
 ## Sponsorship
 
@@ -581,6 +581,7 @@ compiled-in default. The image a Job actually used is recorded in
 
 | Operator | Default engine | Minimum engine | Notes |
 |----------|----------------|----------------|-------|
+| 0.6.2 | v0.30.1 | v0.16.0 | Restores that create their topics wait for each new partition (fixes `ListOffsets error ... code 3`, seen on Confluent Cloud); engine adds OAuth and Schema Registry / Apicurio support, not exposed by the CRDs |
 | 0.6.1 | v0.28.1 | v0.16.0 | Correct overlap/PITR dry-run counts; validation counts visible records instead of offset spans |
 | 0.6.0 | v0.28.0 | v0.16.0 | Bounded empty-fetch retries; accurate restore byte/throughput metrics; new optional retry/Fetch-wait settings require engine 0.28.0 |
 | 0.5.0 | v0.27.2 | v0.16.0 | Engine fixes through 0.27.2; backup error counters publish zero before the first error |
